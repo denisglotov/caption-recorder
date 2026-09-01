@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CaptionRecorder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <header class="popup-header">
+        <div class="header-brand">
+          <div class="brand-icon">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <span class="brand-name">CaptionRecorder</span>
+        </div>
+        <span class="brand-badge">MV3</span>
+      </header>
+
+      <main class="popup-content">
+        <!-- Recovery Section (Displayed if unsaved draft exists) -->
+        <section id="sec-recovery" class="card recovery-card" style="display: none">
+          <div class="card-header">
+            <div class="alert-indicator"></div>
+            <h2 id="txt-recovery-title" class="card-title">Unsaved Meeting Found</h2>
+          </div>
+          <p id="txt-recovery-desc" class="card-desc">
+            You have an unsaved transcript from a previous meeting session.
+          </p>
+
+          <div class="meeting-meta">
+            <div class="meta-row">
+              <span id="lbl-recorded-at" class="meta-label">Recorded:</span>
+              <span id="val-recorded-at" class="meta-val">-</span>
+            </div>
+            <div class="meta-row">
+              <span id="lbl-duration" class="meta-label">Duration:</span>
+              <span id="val-duration" class="meta-val">-</span>
+            </div>
+            <div class="meta-row">
+              <span id="lbl-speakers" class="meta-label">Speakers:</span>
+              <span id="val-speakers" class="meta-val">-</span>
+            </div>
+          </div>
+
+          <div class="export-controls">
+            <select id="sel-export-fmt" class="select-format">
+              <option value="md">Markdown (.md)</option>
+              <option value="txt">Plain Text (.txt)</option>
+              <option value="srt">Subtitles (.srt)</option>
+              <option value="vtt">Subtitles (.vtt)</option>
+            </select>
+            <div class="action-buttons">
+              <button id="btn-save-draft" class="btn btn-primary">Export & Save</button>
+              <button id="btn-discard-draft" class="btn btn-danger">Discard</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Status Section (Displayed when no draft or after saving) -->
+        <section id="sec-idle" class="card status-card">
+          <div class="status-circle">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#4f46e5"
+              stroke-width="2"
+            >
+              <path
+                d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V17a1 1 0 0 1-2 0v-.07A7 7 0 1 1 13 4.07V5a1 1 0 0 1-2 0v-.93a9 9 0 1 0 2 12.86z"
+              />
+            </svg>
+          </div>
+          <h3 id="txt-idle-title" class="status-title">Ready for Meetings</h3>
+          <p id="txt-idle-desc" class="status-desc">
+            Open Google Meet to automatically record live closed captions.
+          </p>
+        </section>
+
+        <!-- AI Status Footer -->
+        <section class="ai-status-card">
+          <div class="ai-info-row">
+            <span class="ai-label">On-device AI (Gemini Nano):</span>
+            <span id="ai-status-pill" class="pill pill-checking">Checking...</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,269 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 340px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.popup-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.brand-badge {
+  font-size: 10px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.popup-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+/* Recovery Card */
+.recovery-card {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.alert-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.card-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.meeting-meta {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.meta-label {
+  color: #64748b;
+}
+
+.meta-val {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.export-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.select-format {
+  width: 100%;
+  padding: 6px 10px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 12px;
+  outline: none;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.btn-primary {
+  background: #4f46e5;
+  color: white;
+}
+.btn-primary:hover {
+  background: #4338ca;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* Status Card */
+.status-card {
+  text-align: center;
+  padding: 20px 14px;
+}
+
+.status-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(79, 70, 229, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.status-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.status-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  max-width: 240px;
+  margin: 0 auto;
+}
+
+/* AI Status Footer */
+.ai-status-card {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.pill-checking {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.pill-ready {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.pill-download {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.pill-unsupported {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
