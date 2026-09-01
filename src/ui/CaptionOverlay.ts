@@ -1,14 +1,7 @@
 import type { PlatformAdapter } from '../adapters/PlatformAdapter';
 import { StreamReconciler } from '../core/StreamReconciler';
 import type { MeetingSession, RecordingStatus } from '../core/types';
-import {
-  exportToMarkdown,
-  exportToSrt,
-  exportToTxt,
-  exportToVtt,
-  triggerDownload,
-  copyToClipboard,
-} from '../core/exporters';
+import { downloadExport, exportToTxt, copyToClipboard, type ExportFormat } from '../core/exporters';
 import { GeminiNanoService } from '../services/GeminiNanoService';
 import { DraftStorageService } from '../services/DraftStorageService';
 import { t } from '../i18n';
@@ -223,25 +216,11 @@ export class CaptionOverlay {
     this.btnCopyAI.addEventListener('click', () => this.handleCopyAI());
 
     // Exports
-    this.shadowRoot.getElementById('cr-exp-txt')?.addEventListener('click', () => {
-      triggerDownload(`${this.getFilenamePrefix()}.txt`, exportToTxt(this.session), 'text/plain');
-    });
-    this.shadowRoot.getElementById('cr-exp-md')?.addEventListener('click', () => {
-      triggerDownload(
-        `${this.getFilenamePrefix()}.md`,
-        exportToMarkdown(this.session),
-        'text/markdown'
-      );
-    });
-    this.shadowRoot.getElementById('cr-exp-srt')?.addEventListener('click', () => {
-      triggerDownload(
-        `${this.getFilenamePrefix()}.srt`,
-        exportToSrt(this.session),
-        'application/x-subrip'
-      );
-    });
-    this.shadowRoot.getElementById('cr-exp-vtt')?.addEventListener('click', () => {
-      triggerDownload(`${this.getFilenamePrefix()}.vtt`, exportToVtt(this.session), 'text/vtt');
+    const exportFormats: ExportFormat[] = ['txt', 'md', 'srt', 'vtt'];
+    exportFormats.forEach((fmt) => {
+      this.shadowRoot.getElementById(`cr-exp-${fmt}`)?.addEventListener('click', () => {
+        downloadExport(this.session, fmt);
+      });
     });
     this.shadowRoot.getElementById('cr-btn-copy-all')?.addEventListener('click', async () => {
       const success = await copyToClipboard(exportToTxt(this.session));
@@ -564,12 +543,6 @@ export class CaptionOverlay {
         this.widgetEl.classList.remove('cr-dragging');
       }
     });
-  }
-
-  private getFilenamePrefix(): string {
-    const dateStr = new Date(this.session.startTime).toISOString().slice(0, 10);
-    const cleanTitle = (this.session.title || 'Meeting').replace(/[^a-zA-Z0-9_-]/g, '_');
-    return `CaptionRecorder_${cleanTitle}_${dateStr}`;
   }
 
   private static escapeHtml(str: string): string {

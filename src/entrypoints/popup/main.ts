@@ -1,11 +1,5 @@
 import { DraftStorageService } from '../../services/DraftStorageService';
-import {
-  exportToMarkdown,
-  exportToSrt,
-  exportToTxt,
-  exportToVtt,
-  triggerDownload,
-} from '../../core/exporters';
+import { downloadExport, type ExportFormat } from '../../core/exporters';
 import type { MeetingSession } from '../../core/types';
 import { t } from '../../i18n';
 
@@ -86,20 +80,9 @@ async function checkUnsavedDraft() {
 
 async function handleExportDraft(session: MeetingSession) {
   const select = document.getElementById('sel-export-fmt') as HTMLSelectElement;
-  const fmt = select ? select.value : 'md';
+  const fmt = (select ? select.value : 'md') as ExportFormat;
 
-  const dateStr = new Date(session.startTime).toISOString().slice(0, 10);
-  const filenamePrefix = `CaptionRecorder_${(session.title || 'Saved_Meeting').replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}`;
-
-  if (fmt === 'txt') {
-    triggerDownload(`${filenamePrefix}.txt`, exportToTxt(session), 'text/plain');
-  } else if (fmt === 'srt') {
-    triggerDownload(`${filenamePrefix}.srt`, exportToSrt(session), 'application/x-subrip');
-  } else if (fmt === 'vtt') {
-    triggerDownload(`${filenamePrefix}.vtt`, exportToVtt(session), 'text/vtt');
-  } else {
-    triggerDownload(`${filenamePrefix}.md`, exportToMarkdown(session), 'text/markdown');
-  }
+  downloadExport(session, fmt);
 
   // Clear draft
   await DraftStorageService.clearDraft();

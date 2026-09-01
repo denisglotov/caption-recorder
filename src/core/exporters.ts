@@ -1,5 +1,13 @@
 import type { MeetingSession } from './types';
 
+export type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt';
+
+export interface ExportData {
+  filename: string;
+  content: string;
+  mimeType: string;
+}
+
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -86,13 +94,12 @@ export function exportToMarkdown(session: MeetingSession): string {
     lines.push(`- **Duration**: ${formatDuration(session.endTime - session.startTime)}`);
   }
   lines.push(`- **Platform**: ${session.platform}`);
-  lines.push(`- **Participants**: ${speakers.join(', ') || 'None'}`);
-  lines.push(`\n---\n`);
+  lines.push(`- **Participants**: ${speakers.join(', ') || 'None'}\n`);
 
   if (session.aiSummary) {
     lines.push(`## 🧠 AI Summary & Action Items\n`);
     lines.push(session.aiSummary);
-    lines.push(`\n---\n`);
+    lines.push('');
   }
 
   lines.push(`## 📝 Transcript\n`);
@@ -150,6 +157,27 @@ export function exportToVtt(session: MeetingSession): string {
 }
 
 /**
+ * Format meeting session and generate filename, content, and MIME type.
+ */
+export function exportSession(session: MeetingSession, format: ExportFormat): ExportData {
+  const dateStr = new Date(session.startTime).toISOString().slice(0, 10);
+  const cleanTitle = (session.title || 'Meeting').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `CaptionRecorder_${cleanTitle}_${dateStr}.${format}`;
+
+  switch (format) {
+    case 'txt':
+      return { filename, content: exportToTxt(session), mimeType: 'text/plain' };
+    case 'srt':
+      return { filename, content: exportToSrt(session), mimeType: 'application/x-subrip' };
+    case 'vtt':
+      return { filename, content: exportToVtt(session), mimeType: 'text/vtt' };
+    case 'md':
+    default:
+      return { filename, content: exportToMarkdown(session), mimeType: 'text/markdown' };
+  }
+}
+
+/**
  * Trigger file download directly in browser
  */
 export function triggerDownload(filename: string, content: string, mimeType: string): void {
@@ -164,6 +192,14 @@ export function triggerDownload(filename: string, content: string, mimeType: str
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 150);
+}
+
+/**
+ * Directly trigger download for a session in the requested format.
+ */
+export function downloadExport(session: MeetingSession, format: ExportFormat): void {
+  const { filename, content, mimeType } = exportSession(session, format);
+  triggerDownload(filename, content, mimeType);
 }
 
 /**

@@ -8,6 +8,14 @@ export interface StreamReconcilerOptions {
 export type SegmentFinalizedCallback = (segment: TranscriptSegment) => void;
 export type ActiveTurnUpdateCallback = (activeSegment: TranscriptSegment | null) => void;
 
+/**
+ * Normalizes a word for speech comparison: lowercases and strips punctuation,
+ * while preserving Unicode letters and numbers across all alphabets.
+ */
+function normalizeWord(w: string): string {
+  return w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
 export class StreamReconciler {
   private turnSilenceThresholdMs: number;
   private activeSegment: TranscriptSegment | null = null;
@@ -154,9 +162,6 @@ export class StreamReconciler {
     const curWords = cur.split(/\s+/);
     const incWords = inc.split(/\s+/);
 
-    // Normalize words for comparison (lower case, strip punctuation, preserve Unicode letters)
-    const normalizeWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-
     const normCurWords = curWords.map(normalizeWord);
     const normIncWords = incWords.map(normalizeWord);
 
@@ -242,8 +247,6 @@ export class StreamReconciler {
     }
 
     if (speakerFinalizedTexts.length === 0) return text;
-
-    const normalizeWord = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
     const rawWords = text.split(/\s+/);
     const normRawWords = rawWords.map(normalizeWord);
