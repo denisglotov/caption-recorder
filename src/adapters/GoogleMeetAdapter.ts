@@ -14,14 +14,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   // Dedicated Google Meet caption text selectors
   private static readonly CAPTION_TEXT_SELECTORS = [
-    '[jsname="dsyhDe"] .ygicle',
-    '[jsname="dsyhDe"] .VbkSUe',
-    '.ygicle.VbkSUe',
     '.ygicle',
     '.VbkSUe',
     '[jsname="YS01Ge"]',
     '.iTTPOb',
   ];
+
+  private static readonly CAPTION_TEXT_SELECTOR_STRING =
+    GoogleMeetAdapter.CAPTION_TEXT_SELECTORS.join(', ');
 
   // Speaker name selectors
   private static readonly SPEAKER_SELECTORS = [
@@ -57,6 +57,8 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     '.cr-widget',
   ];
 
+  private static readonly EXCLUDE_SELECTOR_STRING = GoogleMeetAdapter.EXCLUDE_SELECTORS.join(', ');
+
   // Material Icon ligature names occasionally rendered as raw text
   private static readonly ICON_FONT_LIGATURES = [
     'arrow_drop_down',
@@ -78,7 +80,9 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   public isCaptionsEnabled(): boolean {
     // 1. Dedicated caption container or active caption text elements exist in DOM
-    if (document.querySelector('[jsname="dsyhDe"], .ygicle.VbkSUe, .ygicle, .VbkSUe')) {
+    if (
+      document.querySelector(`[jsname="dsyhDe"], ${GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING}`)
+    ) {
       return true;
     }
 
@@ -86,11 +90,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     const ccBtn = document.querySelector<HTMLButtonElement>(
       'button[jsname="r8qRAd"], button[aria-keyshortcuts*="c"]'
     );
-    if (ccBtn?.getAttribute('aria-pressed') === 'true') {
-      return true;
-    }
-
-    return false;
+    return ccBtn?.getAttribute('aria-pressed') === 'true';
   }
 
   public observe(
@@ -153,14 +153,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       if (!el || this.isExcluded(el)) continue;
 
       // Check if target matches caption text element directly or is inside one
-      const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTORS.join(', '));
-      if (!textEl || this.isExcluded(textEl)) continue;
-
-      const text = textEl.textContent?.trim() || '';
-      if (!this.isValidCaptionText(text)) continue;
-
-      const speaker = this.extractSpeakerForTextElement(textEl);
-      this.emitCaption(speaker, text);
+      const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING);
+      if (textEl) {
+        this.processCaptionElement(textEl);
+      }
     }
   }
 
@@ -171,18 +167,27 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.onCaptionCallback) return;
 
     const latestEl = this.findLatestCaptionElement();
-    if (!latestEl) return;
+    if (latestEl) {
+      this.processCaptionElement(latestEl);
+    }
+  }
 
-    const text = latestEl.textContent?.trim() || '';
+  /**
+   * Unified caption processing for both mutation events and scan polling.
+   */
+  private processCaptionElement(textEl: HTMLElement): void {
+    if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
+
+    const text = textEl.textContent?.trim() || '';
     if (!this.isValidCaptionText(text)) return;
 
-    const speaker = this.extractSpeakerForTextElement(latestEl);
+    const speaker = this.extractSpeakerForTextElement(textEl);
     this.emitCaption(speaker, text);
   }
 
   private findLatestCaptionElement(): HTMLElement | null {
     const textEls = document.querySelectorAll<HTMLElement>(
-      GoogleMeetAdapter.CAPTION_TEXT_SELECTORS.join(', ')
+      GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
     );
 
     for (let i = textEls.length - 1; i >= 0; i--) {
@@ -252,14 +257,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   private isExcluded(el: HTMLElement): boolean {
     if (!el) return true;
-
-    for (const sel of GoogleMeetAdapter.EXCLUDE_SELECTORS) {
-      if (el.closest(sel)) {
-        return true;
-      }
-    }
-
-    return false;
+    return Boolean(el.closest(GoogleMeetAdapter.EXCLUDE_SELECTOR_STRING));
   }
 
   private checkCaptionsState(): void {
@@ -272,7 +270,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   public runDiagnostics(): Record<string, unknown> {
     const textEls = Array.from(
-      document.querySelectorAll(GoogleMeetAdapter.CAPTION_TEXT_SELECTORS.join(', '))
+      document.querySelectorAll(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING)
     ).map((el) => ({
       tagName: el.tagName,
       className: el.className,
