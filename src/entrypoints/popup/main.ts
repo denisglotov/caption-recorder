@@ -1,5 +1,4 @@
 import { DraftStorageService } from '../../services/DraftStorageService';
-import { GeminiNanoService } from '../../services/GeminiNanoService';
 import {
   exportToMarkdown,
   exportToSrt,
@@ -13,7 +12,7 @@ import { t } from '../../i18n';
 async function initPopup() {
   localizeUI();
   await checkUnsavedDraft();
-  await checkAIStatus();
+  checkAIStatus();
 }
 
 function localizeUI() {
@@ -119,24 +118,17 @@ async function handleExportDraft(session: MeetingSession) {
   }
 }
 
-async function checkAIStatus() {
+function checkAIStatus() {
   const pill = document.getElementById('ai-status-pill');
   if (!pill) return;
 
-  const status = await GeminiNanoService.checkAvailability();
-
-  if (status.status === 'readily') {
+  const hasAI = typeof window !== 'undefined' && Boolean(window.ai || window.LanguageModel);
+  if (hasAI) {
     pill.className = 'pill pill-ready';
-    pill.textContent = 'Ready';
-  } else if (status.status === 'after-download') {
-    pill.className = 'pill pill-download';
-    pill.textContent = 'Downloading';
-  } else if (status.status === 'unsupported-browser') {
-    pill.className = 'pill pill-unsupported';
-    pill.textContent = 'Chrome only';
+    pill.textContent = 'Supported';
   } else {
     pill.className = 'pill pill-unsupported';
-    pill.textContent = 'Not enabled';
+    pill.textContent = 'Chrome only';
   }
 }
 

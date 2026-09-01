@@ -7,8 +7,12 @@ export interface AISession {
 }
 
 export interface AILanguageModel {
-  capabilities?: () => Promise<{ available: 'readily' | 'after-download' | 'no' }>;
-  availability?: () => Promise<'readily' | 'after-download' | 'no'>;
+  capabilities?: (
+    options?: Record<string, unknown>
+  ) => Promise<{ available: 'readily' | 'after-download' | 'no' }>;
+  availability?: (
+    options?: Record<string, unknown>
+  ) => Promise<'readily' | 'after-download' | 'no'>;
   create?: (options?: Record<string, unknown>) => Promise<AISession>;
   params?: () => Promise<Record<string, unknown>>;
 }
@@ -26,6 +30,17 @@ declare global {
 }
 
 export class GeminiNanoService {
+  /**
+   * Return a supported output language code for Chrome's Prompt API (de, en, es, fr, ja).
+   */
+  public static getSupportedOutputLanguage(): string {
+    const navLang = (typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en')
+      .slice(0, 2)
+      .toLowerCase();
+    const supported = ['de', 'en', 'es', 'fr', 'ja'];
+    return supported.includes(navLang) ? navLang : 'en';
+  }
+
   /**
    * Check if Gemini Nano is available on this browser.
    */
@@ -45,12 +60,32 @@ export class GeminiNanoService {
         'languageModel' in ai && ai.languageModel ? ai.languageModel : (ai as AILanguageModel);
 
       let avail: 'readily' | 'after-download' | 'no' = 'no';
+      const outputLang = this.getSupportedOutputLanguage();
+      const checkOpts = {
+        expectedInputs: [{ type: 'text', languages: [outputLang] }],
+        expectedOutputs: [{ type: 'text', languages: [outputLang] }],
+      };
 
       if (typeof lm.availability === 'function') {
-        avail = await lm.availability();
-      } else if (typeof lm.capabilities === 'function') {
-        const caps = await lm.capabilities();
-        avail = caps.available;
+        try {
+          const res = await lm.availability(checkOpts);
+          if (res === 'readily' || (res as string) === 'available') {
+            avail = 'readily';
+          } else if (
+            res === 'after-download' ||
+            (res as string) === 'downloadable' ||
+            (res as string) === 'downloading'
+          ) {
+            avail = 'after-download';
+          }
+        } catch {
+          // If availability with options failed, fallback to checking if create is supported
+          if (typeof lm.create === 'function') {
+            avail = 'readily';
+          }
+        }
+      } else if (typeof lm.create === 'function') {
+        avail = 'readily';
       }
 
       if (avail === 'readily') {
@@ -123,13 +158,25 @@ export class GeminiNanoService {
   private static async createSession(lm?: AILanguageModel): Promise<AISession> {
     const systemPrompt =
       'You are an executive meeting assistant. Provide a concise executive summary, key discussion points, and clear action items with assignees if mentioned. Do not make up facts.';
+    const outputLang = this.getSupportedOutputLanguage();
 
     if (lm?.create) {
-      return await lm.create({
-        systemPrompt,
-        temperature: 0.2,
-        topK: 3,
-      });
+      try {
+        return await lm.create({
+          systemPrompt,
+          temperature: 0.2,
+          topK: 3,
+          expectedInputs: [{ type: 'text', languages: [outputLang] }],
+          expectedOutputs: [{ type: 'text', languages: [outputLang] }],
+        });
+      } catch {
+        return await lm.create({
+          systemPrompt,
+          temperature: 0.2,
+          topK: 3,
+          expectedOutputs: [{ type: 'text', languages: [outputLang] }],
+        });
+      }
     }
 
     if (window.ai?.createTextSession) {
