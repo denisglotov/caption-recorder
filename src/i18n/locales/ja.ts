@@ -15,6 +15,7 @@ export const ja: TranslationDict = {
     closeDrawer: 'パネルを閉じる',
     minimize: '最小化',
     maximize: '展開',
+    newSession: '新しいミーティング',
   },
   nudge: {
     ccOff: '字幕がオフです。録音するにはMeetの字幕（CC）をオンにしてください。',

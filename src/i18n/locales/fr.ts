@@ -15,6 +15,7 @@ export const fr: TranslationDict = {
     closeDrawer: 'Fermer le panneau',
     minimize: 'Réduire',
     maximize: 'Agrandir',
+    newSession: 'Nouvelle réunion',
   },
   nudge: {
     ccOff: 'Sous-titres désactivés. Activez les sous-titres (CC) dans Meet pour enregistrer.',

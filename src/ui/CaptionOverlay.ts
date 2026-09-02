@@ -20,6 +20,7 @@ export class CaptionOverlay {
   private elapsedSeconds: number = 0;
   private userManuallyStopped: boolean = false;
   private activeDraft: InterimCaption | null = null;
+  private restorePromise: Promise<void> | null = null;
 
   // DOM element references
   private widgetEl!: HTMLElement;
@@ -59,12 +60,14 @@ export class CaptionOverlay {
       startTime: now,
       segments: [],
       platform: 'google-meet',
+      url: typeof window !== 'undefined' ? window.location.href : undefined,
     };
 
     this.initDOM();
     this.attachEventListeners();
     this.loadSavedLanguage();
     this.checkCaptionsState();
+    this.restorePromise = this.restoreDraftSession();
   }
 
   private initDOM(): void {
@@ -105,9 +108,32 @@ export class CaptionOverlay {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span>CaptionRecorder</span>
           </div>
-          <button class="cr-drawer-close" id="cr-drawer-close" title="${t('controls.closeDrawer')}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div class="cr-drawer-actions">
+            <button class="cr-btn-xs" id="cr-btn-new-meeting" title="${t('controls.newSession')}" style="display:none;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              <span>${t('controls.newSession')}</span>
+            </button>
+            <button class="cr-drawer-close" id="cr-drawer-close" title="${t('controls.closeDrawer')}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Recovery Banner -->
+        <div class="cr-recovery-banner" id="cr-recovery-banner" style="display:none;">
+          <div class="cr-recovery-text">
+            <div class="cr-recovery-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              <span>${t('recovery.title')}</span>
+            </div>
+            <div class="cr-recovery-desc" id="cr-recovery-desc">${t('recovery.description')}</div>
+          </div>
+          <div class="cr-recovery-actions">
+            <button class="cr-btn-xs cr-btn-primary" id="cr-btn-rec-export">${t('tabs.export')}</button>
+            <button class="cr-btn-xs cr-btn-danger" id="cr-btn-rec-discard" title="${t('recovery.discard')}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
         </div>
 
         <div class="cr-tabs">
@@ -183,6 +209,10 @@ export class CaptionOverlay {
           <button class="cr-btn-secondary" id="cr-btn-copy-all" style="width:100%; justify-content:center;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             <span>${t('export.copyClipboard')}</span>
+          </button>
+          <button class="cr-btn-secondary cr-btn-danger" id="cr-btn-reset-meeting" style="width:100%; justify-content:center; margin-top:8px; display:none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span>${t('controls.newSession')}</span>
           </button>
         </div>
       </div>
@@ -264,12 +294,57 @@ export class CaptionOverlay {
       }
     });
 
+    // New Meeting & Session Controls
+    this.shadowRoot
+      .getElementById('cr-btn-new-meeting')
+      ?.addEventListener('click', () => this.handleNewMeetingClick());
+    this.shadowRoot
+      .getElementById('cr-btn-reset-meeting')
+      ?.addEventListener('click', () => this.handleNewMeetingClick());
+    this.shadowRoot.getElementById('cr-btn-rec-export')?.addEventListener('click', () => {
+      this.openDrawer();
+      this.switchTab('export');
+    });
+    this.shadowRoot
+      .getElementById('cr-btn-rec-discard')
+      ?.addEventListener('click', () => this.handleNewMeetingClick());
+
+    // Page Unload / Navigation: Guarantee unflushed speech and active draft are persisted
+    const handleUnload = () => {
+      this.adapter.flush?.();
+      if (this.status === 'recording') {
+        this.session.endTime = Date.now();
+      }
+      if (this.session.segments.length > 0) {
+        DraftStorageService.saveDraftImmediate(this.session);
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
+    // Sync with extension popup if draft is cleared externally
+    if (typeof chrome !== 'undefined' && chrome?.storage?.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local' && changes['caption_recorder_unsaved_draft']) {
+          if (!changes['caption_recorder_unsaved_draft'].newValue) {
+            if (this.status === 'idle' && this.session.segments.length > 0) {
+              this.resetSession(false);
+            }
+          }
+        }
+      });
+    }
+
     // Draggable Widget
     this.initDraggable();
 
     // Monitor captions enabled state
     this.adapter.observe(
-      (caption) => {
+      async (caption) => {
+        if (this.restorePromise) {
+          await this.restorePromise;
+        }
+
         // Finalized caption
         this.tickerEl.textContent = `${caption.speaker}: ${caption.text.slice(-25)}`;
 
@@ -290,13 +365,18 @@ export class CaptionOverlay {
           this.session.segments.push(segment);
           this.updateStats();
           this.renderTranscriptList();
+          this.updateNewMeetingButtons(true);
           DraftStorageService.saveDraftDebounced(this.session);
         }
       },
       (enabled) => {
         this.updateCaptionsNudge(enabled);
       },
-      (activeCaption) => {
+      async (activeCaption) => {
+        if (this.restorePromise) {
+          await this.restorePromise;
+        }
+
         this.activeDraft = activeCaption;
         if (activeCaption) {
           this.tickerEl.textContent = `${activeCaption.speaker}: ${activeCaption.text.slice(-25)}`;
@@ -317,13 +397,20 @@ export class CaptionOverlay {
     );
   }
 
-  private startRecording(): void {
+  private async startRecording(): Promise<void> {
+    if (this.restorePromise) {
+      await this.restorePromise;
+    }
+
     this.userManuallyStopped = false;
     this.status = 'recording';
+    this.session.endTime = undefined;
     this.dotEl.className = 'cr-dot cr-dot-rec';
     this.btnStart.style.display = 'none';
     this.btnPause.style.display = 'flex';
     this.btnStop.style.display = 'flex';
+    this.hideRecoveryBanner();
+    this.updateNewMeetingButtons(true);
 
     if (!this.timerInterval) {
       this.timerInterval = setInterval(() => {
@@ -369,6 +456,7 @@ export class CaptionOverlay {
     this.activeDraft = null;
     this.session.endTime = Date.now();
     this.updateStats();
+    this.updateNewMeetingButtons(true);
 
     // Mirror to local draft immediately so user doesn't lose it
     DraftStorageService.saveDraftImmediate(this.session);
@@ -460,7 +548,7 @@ export class CaptionOverlay {
         this.session.aiSummary = summary;
         this.aiOutputEl.textContent = summary;
         this.btnCopyAI.style.display = 'inline-flex';
-        DraftStorageService.saveDraftDebounced(this.session);
+        DraftStorageService.saveDraftImmediate(this.session);
       } else {
         this.aiOutputEl.textContent = 'No summary could be generated. Please try again.';
         this.btnCopyAI.style.display = 'none';
@@ -645,6 +733,154 @@ export class CaptionOverlay {
         this.widgetEl.classList.remove('cr-dragging');
       }
     });
+  }
+
+  /**
+   * Restore any unsaved meeting draft from local storage across page reloads.
+   */
+  private async restoreDraftSession(): Promise<void> {
+    try {
+      const draft = await DraftStorageService.getUnsavedDraft();
+      if (!draft || !Array.isArray(draft.segments) || draft.segments.length === 0) {
+        return;
+      }
+
+      console.info(
+        `[CaptionRecorder] Restoring saved draft session (${draft.segments.length} segments, ${draft.id})`
+      );
+
+      this.session = {
+        id: draft.id || this.session.id,
+        title: draft.title || document.title || 'Google Meet',
+        startTime: draft.startTime || this.session.startTime,
+        endTime: draft.endTime,
+        segments: [...draft.segments],
+        aiSummary: draft.aiSummary,
+        platform: draft.platform || 'google-meet',
+        savedAt: draft.savedAt,
+        url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
+      };
+
+      const endTime = draft.endTime || draft.savedAt || Date.now();
+      this.elapsedSeconds = Math.max(0, Math.floor((endTime - this.session.startTime) / 1000));
+
+      this.updateTimerDisplay();
+      this.updateStats();
+      this.renderTranscriptList();
+
+      if (draft.aiSummary) {
+        this.aiOutputEl.textContent = draft.aiSummary;
+        this.btnCopyAI.style.display = 'inline-flex';
+      }
+
+      const lastSeg = draft.segments[draft.segments.length - 1];
+      if (lastSeg) {
+        this.tickerEl.textContent = `${lastSeg.speaker}: ${lastSeg.text.slice(-25)}`;
+      }
+
+      this.updateNewMeetingButtons(true);
+
+      if (draft.endTime) {
+        this.status = 'idle';
+        this.userManuallyStopped = true;
+        this.showRecoveryBanner(draft);
+        // Automatically open the drawer to export tab after page reload if meeting has ended
+        this.openDrawer();
+        this.switchTab('export');
+      } else {
+        this.showRecoveryBanner(draft);
+      }
+    } catch (err) {
+      console.warn('[CaptionRecorder] Failed to restore draft session', err);
+    }
+  }
+
+  private showRecoveryBanner(draft: MeetingSession): void {
+    const banner = this.shadowRoot.getElementById('cr-recovery-banner');
+    const desc = this.shadowRoot.getElementById('cr-recovery-desc');
+    if (!banner) return;
+
+    banner.style.display = 'flex';
+    if (desc) {
+      const durationSec = Math.max(
+        0,
+        Math.floor(((draft.endTime || draft.savedAt || Date.now()) - draft.startTime) / 1000)
+      );
+      const m = Math.floor(durationSec / 60);
+      const s = durationSec % 60;
+      const speakers = Array.from(new Set(draft.segments.map((s) => s.speaker))).length;
+      desc.textContent = `${draft.segments.length} turns • ${m}m ${s}s • ${speakers} speaker${speakers === 1 ? '' : 's'}`;
+    }
+  }
+
+  private hideRecoveryBanner(): void {
+    const banner = this.shadowRoot.getElementById('cr-recovery-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  private updateNewMeetingButtons(show: boolean): void {
+    const btnHeader = this.shadowRoot.getElementById('cr-btn-new-meeting');
+    const btnExport = this.shadowRoot.getElementById('cr-btn-reset-meeting');
+    const displayVal = show ? 'inline-flex' : 'none';
+    if (btnHeader) btnHeader.style.display = displayVal;
+    if (btnExport) btnExport.style.display = displayVal;
+  }
+
+  private async handleNewMeetingClick(): Promise<void> {
+    if (this.session.segments.length > 0) {
+      const confirmed = window.confirm(t('recovery.discardConfirm'));
+      if (!confirmed) return;
+    }
+    await this.resetSession();
+  }
+
+  private async resetSession(clearStorage: boolean = true): Promise<void> {
+    if (this.status === 'recording') {
+      this.userManuallyStopped = true;
+      this.status = 'idle';
+      this.dotEl.className = 'cr-dot';
+      this.btnStart.style.display = 'flex';
+      this.btnPause.style.display = 'none';
+      this.btnStop.style.display = 'none';
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+      this.adapter.flush?.();
+    }
+
+    if (clearStorage) {
+      await DraftStorageService.clearDraft();
+    }
+
+    const now = Date.now();
+    this.session = {
+      id: `session_${now}`,
+      title: document.title || 'Google Meet',
+      startTime: now,
+      segments: [],
+      platform: 'google-meet',
+      url: typeof window !== 'undefined' ? window.location.href : undefined,
+    };
+
+    this.status = 'idle';
+    this.elapsedSeconds = 0;
+    this.userManuallyStopped = false;
+    this.activeDraft = null;
+
+    this.updateTimerDisplay();
+    this.updateStats();
+    this.renderTranscriptList();
+    this.hideRecoveryBanner();
+    this.updateNewMeetingButtons(false);
+
+    this.aiOutputEl.textContent = t('summary.empty');
+    this.btnCopyAI.style.display = 'none';
+    this.tickerEl.textContent = t('nudge.noCaptionsYet');
+    this.dotEl.className = 'cr-dot';
+    this.btnStart.style.display = 'flex';
+    this.btnPause.style.display = 'none';
+    this.btnStop.style.display = 'none';
   }
 
   private static escapeHtml(str: string): string {

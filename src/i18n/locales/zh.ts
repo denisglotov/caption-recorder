@@ -15,6 +15,7 @@ export const zh: TranslationDict = {
     closeDrawer: '关闭面板',
     minimize: '最小化',
     maximize: '展开',
+    newSession: '新会议',
   },
   nudge: {
     ccOff: '字幕已关闭。请在 Google Meet 中开启字幕（CC）以开始录制。',

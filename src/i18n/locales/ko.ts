@@ -15,6 +15,7 @@ export const ko: TranslationDict = {
     closeDrawer: '패널 닫기',
     minimize: '최소화',
     maximize: '확대',
+    newSession: '새 회의',
   },
   nudge: {
     ccOff: '자막이 꺼져 있습니다. 기록하려면 Meet에서 자막(CC)을 켜세요.',

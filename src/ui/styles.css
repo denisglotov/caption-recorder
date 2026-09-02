@@ -211,6 +211,12 @@
   gap: 8px;
 }
 
+.cr-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .cr-drawer-close {
   background: transparent;
   border: none;
@@ -458,4 +464,87 @@
   font-weight: 600;
   color: #f8fafc;
   font-size: 13px;
+}
+
+/* Recovery Banner */
+.cr-recovery-banner {
+  background: rgba(30, 41, 59, 0.95);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.cr-recovery-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cr-recovery-title {
+  font-weight: 600;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cr-recovery-desc {
+  color: #94a3b8;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cr-recovery-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Compact button variants */
+.cr-btn-xs {
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.cr-btn-xs:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cr-btn-sm {
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.cr-btn-danger {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+}
+.cr-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }

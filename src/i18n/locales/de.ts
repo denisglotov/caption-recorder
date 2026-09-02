@@ -15,6 +15,7 @@ export const de: TranslationDict = {
     closeDrawer: 'Panel schließen',
     minimize: 'Minimieren',
     maximize: 'Vergrößern',
+    newSession: 'Neues Meeting',
   },
   nudge: {
     ccOff: 'Untertitel sind deaktiviert. Bitte aktivieren Sie Untertitel (CC) in Meet.',

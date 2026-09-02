@@ -15,6 +15,7 @@ export const en: TranslationDict = {
     closeDrawer: 'Close Panel',
     minimize: 'Minimize',
     maximize: 'Expand',
+    newSession: 'New Meeting',
   },
   nudge: {
     ccOff: 'Captions are off. Turn on Closed Captions (CC) in Meet to record.',

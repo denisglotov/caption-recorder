@@ -15,6 +15,7 @@ export const ru: TranslationDict = {
     closeDrawer: 'Закрыть панель',
     minimize: 'Свернуть',
     maximize: 'Развернуть',
+    newSession: 'Новая встреча',
   },
   nudge: {
     ccOff: 'Субтитры выключены. Включите субтитры (CC) в Google Meet для записи.',

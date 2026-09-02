@@ -13,6 +13,7 @@ export interface TranslationDict {
     closeDrawer: string;
     minimize: string;
     maximize: string;
+    newSession: string;
   };
   nudge: {
     ccOff: string;

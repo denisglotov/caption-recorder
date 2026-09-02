@@ -28,6 +28,11 @@ export class DraftStorageService {
    * Immediately persist session draft to chrome.storage.local.
    */
   public static async saveDraftImmediate(session: MeetingSession): Promise<void> {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+
     try {
       if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
         await chrome.storage.local.set({

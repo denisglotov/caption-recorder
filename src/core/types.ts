@@ -22,6 +22,7 @@ export interface MeetingSession {
   aiSummary?: string;
   platform: 'google-meet' | 'zoom' | 'teams' | 'unknown';
   savedAt?: number;
+  url?: string;
 }
 
 export type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt';
