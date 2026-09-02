@@ -31,14 +31,141 @@ declare global {
 
 export class GeminiNanoService {
   /**
-   * Return a supported output language code for Chrome's Prompt API (de, en, es, fr, ja).
+   * Safe fallback language codes if the browser does not support Prompt API language inspection.
    */
-  public static getSupportedOutputLanguage(): string {
+  public static readonly FALLBACK_SUPPORTED_LANGUAGES = ['de', 'en', 'es', 'fr', 'ja'];
+
+  /**
+   * Cached dynamically detected Prompt API supported language codes.
+   */
+  private static cachedSupportedLanguages: string[] | null = null;
+  private static detectPromise: Promise<string[]> | null = null;
+
+  /**
+   * Clear cached languages (useful for testing).
+   */
+  public static clearSupportedLanguagesCache(): void {
+    this.cachedSupportedLanguages = null;
+    this.detectPromise = null;
+  }
+
+  /**
+   * Dynamically detect which languages are supported by Chrome's LanguageModel Prompt API.
+   * Memoized: executes probe once and caches the result for the entire session.
+   * 1. Checks if capabilities() exposes supported languages directly (future W3C spec).
+   * 2. Probes LanguageModel.availability() with a dummy tag to extract Chrome's dynamic whitelist from the error.
+   * 3. Tests candidate languages via availability().
+   * 4. Defaults to safe fallback list ['de', 'en', 'es', 'fr', 'ja'].
+   */
+  public static async detectSupportedLanguages(lm?: AILanguageModel): Promise<string[]> {
+    if (this.cachedSupportedLanguages && this.cachedSupportedLanguages.length > 0) {
+      return this.cachedSupportedLanguages;
+    }
+    if (this.detectPromise) {
+      return this.detectPromise;
+    }
+
+    this.detectPromise = (async () => {
+      const ai =
+        lm ||
+        (typeof window !== 'undefined'
+          ? window.ai?.languageModel || (window.LanguageModel as AILanguageModel | undefined)
+          : undefined);
+
+      if (!ai) {
+        this.cachedSupportedLanguages = this.FALLBACK_SUPPORTED_LANGUAGES;
+        return this.FALLBACK_SUPPORTED_LANGUAGES;
+      }
+
+      // 1. Check if capabilities() or params() exposes supported languages directly
+      if (typeof ai.capabilities === 'function') {
+        try {
+          const caps = (await ai.capabilities()) as Record<string, unknown>;
+          const list = (caps?.languages || caps?.supportedLanguages) as string[] | undefined;
+          if (Array.isArray(list) && list.length > 0) {
+            const lower = list.map((l) => l.toLowerCase());
+            this.cachedSupportedLanguages = lower;
+            return lower;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 2. Probe availability() with an invalid tag to extract Chrome's dynamic whitelist from the error message
+      if (typeof ai.availability === 'function') {
+        try {
+          await ai.availability({
+            expectedOutputs: [{ type: 'text', languages: ['__probe__'] }],
+          });
+        } catch (err: unknown) {
+          const message = String((err as Error)?.message || err);
+          const match = message.match(/supported language codes:\s*\[([^\]]+)\]/i);
+          if (match && match[1]) {
+            const parsed = match[1]
+              .split(',')
+              .map((s) => s.trim().toLowerCase())
+              .filter(Boolean);
+            if (parsed.length > 0) {
+              this.cachedSupportedLanguages = parsed;
+              return parsed;
+            }
+          }
+        }
+      }
+
+      // 3. Alternatively probe candidate languages individually via availability()
+      if (typeof ai.availability === 'function') {
+        const candidates = Object.keys(this.SUPPORTED_LANGUAGES);
+        const verified: string[] = [];
+        for (const lang of candidates) {
+          try {
+            const status = await ai.availability({
+              expectedOutputs: [{ type: 'text', languages: [lang] }],
+            });
+            const s = String(status);
+            if (
+              s === 'readily' ||
+              s === 'available' ||
+              s === 'after-download' ||
+              s === 'downloadable' ||
+              s === 'downloading'
+            ) {
+              verified.push(lang);
+            }
+          } catch {
+            // Unsupported language rejected
+          }
+        }
+        if (verified.length > 0) {
+          this.cachedSupportedLanguages = verified;
+          return verified;
+        }
+      }
+
+      this.cachedSupportedLanguages = this.FALLBACK_SUPPORTED_LANGUAGES;
+      return this.FALLBACK_SUPPORTED_LANGUAGES;
+    })();
+
+    return this.detectPromise;
+  }
+
+  /**
+   * Return a supported output language code for Chrome's Prompt API.
+   * If targetLanguage is in the supported list, it is returned.
+   * Otherwise, falls back to the user's browser language (if supported), or 'en'.
+   */
+  public static getSupportedOutputLanguage(
+    targetLanguage?: string,
+    supportedList: string[] = this.cachedSupportedLanguages || this.FALLBACK_SUPPORTED_LANGUAGES
+  ): string {
+    if (targetLanguage && supportedList.includes(targetLanguage.toLowerCase())) {
+      return targetLanguage.toLowerCase();
+    }
     const navLang = (typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en')
       .slice(0, 2)
       .toLowerCase();
-    const supported = ['de', 'en', 'es', 'fr', 'ja'];
-    return supported.includes(navLang) ? navLang : 'en';
+    return supportedList.includes(navLang) ? navLang : supportedList[0] || 'en';
   }
 
   /**
@@ -60,26 +187,28 @@ export class GeminiNanoService {
         'languageModel' in ai && ai.languageModel ? ai.languageModel : (ai as AILanguageModel);
 
       let avail: 'readily' | 'after-download' | 'no' = 'no';
-      const outputLang = this.getSupportedOutputLanguage();
-      const checkOpts = {
-        expectedInputs: [{ type: 'text', languages: [outputLang] }],
-        expectedOutputs: [{ type: 'text', languages: [outputLang] }],
-      };
 
       if (typeof lm.availability === 'function') {
         try {
-          const res = await lm.availability(checkOpts);
-          if (res === 'readily' || (res as string) === 'available') {
+          const res = await lm.availability();
+          const s = String(res);
+          if (s === 'readily' || s === 'available') {
             avail = 'readily';
-          } else if (
-            res === 'after-download' ||
-            (res as string) === 'downloadable' ||
-            (res as string) === 'downloading'
-          ) {
+          } else if (s === 'after-download' || s === 'downloadable' || s === 'downloading') {
             avail = 'after-download';
           }
         } catch {
-          // If availability with options failed, fallback to checking if create is supported
+          if (typeof lm.create === 'function') {
+            avail = 'readily';
+          }
+        }
+      } else if (typeof lm.capabilities === 'function') {
+        try {
+          const caps = await lm.capabilities();
+          if (caps.available === 'readily' || caps.available === 'after-download') {
+            avail = caps.available;
+          }
+        } catch {
           if (typeof lm.create === 'function') {
             avail = 'readily';
           }
@@ -167,13 +296,22 @@ export class GeminiNanoService {
 
     const wordCount = fullTranscript.split(/\s+/).length;
 
+    // Detect supported Prompt API languages once for this entire summarization run
+    const supportedLangs = await this.detectSupportedLanguages(lm);
+
     if (wordCount > 1800) {
       // Long meeting: Hierarchical summarization
       onProgress?.('Analyzing long meeting in sections...\n');
-      return this.hierarchicalSummarize(segments, lm, onProgress, targetLanguage);
+      return this.hierarchicalSummarize(segments, lm, onProgress, targetLanguage, supportedLangs);
     } else {
       // Standard meeting: Single-pass summarization
-      return this.singlePassSummarize(fullTranscript, lm, onProgress, targetLanguage);
+      return this.singlePassSummarize(
+        fullTranscript,
+        lm,
+        onProgress,
+        targetLanguage,
+        supportedLangs
+      );
     }
   }
 
@@ -259,18 +397,24 @@ export class GeminiNanoService {
    */
   private static async createSession(
     lm?: AILanguageModel,
-    targetLanguage?: string
+    targetLanguage?: string,
+    supportedLangs?: string[]
   ): Promise<AISession> {
     const langInstruction = this.getLanguageInstruction(targetLanguage);
     const systemPrompt = `You are an executive meeting assistant. Provide a concise executive summary, key discussion points, and clear action items with assignees if mentioned. Do not make up facts. ${langInstruction}`;
-    const outputLang =
-      targetLanguage && targetLanguage !== 'auto' && targetLanguage in this.SUPPORTED_LANGUAGES
-        ? targetLanguage
-        : this.getSupportedOutputLanguage();
+    const langs = supportedLangs || (await this.detectSupportedLanguages(lm));
+    const outputLang = this.getSupportedOutputLanguage(targetLanguage, langs);
 
     if (lm?.create) {
       // Fallbacks ordered by Chrome API revision (Chrome 131+ down to early builds)
+      // Note: expectedOutputs must only declare Chrome-supported language codes [de, en, es, fr, ja]
       const candidates: Record<string, unknown>[] = [
+        {
+          systemPrompt,
+          temperature: 0.2,
+          topK: 3,
+          expectedOutputs: [{ type: 'text', languages: [outputLang] }],
+        },
         {
           systemPrompt,
           temperature: 0.2,
@@ -279,18 +423,13 @@ export class GeminiNanoService {
           expectedOutputs: [{ type: 'text', languages: [outputLang] }],
         },
         {
-          systemPrompt,
+          initialPrompts: [{ role: 'system', content: systemPrompt }],
           temperature: 0.2,
           topK: 3,
           expectedOutputs: [{ type: 'text', languages: [outputLang] }],
         },
         {
           systemPrompt,
-          temperature: 0.2,
-          topK: 3,
-        },
-        {
-          initialPrompts: [{ role: 'system', content: systemPrompt }],
           temperature: 0.2,
           topK: 3,
         },
@@ -319,9 +458,10 @@ export class GeminiNanoService {
     transcript: string,
     lm?: AILanguageModel,
     onProgress?: (partialText: string) => void,
-    targetLanguage?: string
+    targetLanguage?: string,
+    supportedLangs?: string[]
   ): Promise<string> {
-    const session = await this.createSession(lm, targetLanguage);
+    const session = await this.createSession(lm, targetLanguage, supportedLangs);
     const langInstruction = this.getLanguageInstruction(targetLanguage);
 
     try {
@@ -347,7 +487,8 @@ ${transcript}`;
     segments: TranscriptSegment[],
     lm?: AILanguageModel,
     onProgress?: (partialText: string) => void,
-    targetLanguage?: string
+    targetLanguage?: string,
+    supportedLangs?: string[]
   ): Promise<string> {
     // Break segments into chunks of ~1200 words
     const chunks: string[] = [];
@@ -376,7 +517,7 @@ ${transcript}`;
     const chunkSummaries: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       onProgress?.(`Processing section ${i + 1} of ${chunks.length}...\n`);
-      const session = await this.createSession(lm, targetLanguage);
+      const session = await this.createSession(lm, targetLanguage, supportedLangs);
       try {
         const prompt = `Provide 3-5 concise bullet points of the main discussions and any tasks in this meeting section (${langInstruction}):\n\n${chunks[i]}`;
         const partial = await session.prompt(prompt);
@@ -388,7 +529,7 @@ ${transcript}`;
 
     // Synthesize combined chunk summaries
     onProgress?.('Synthesizing final executive summary and action items...\n');
-    const synthesisSession = await this.createSession(lm, targetLanguage);
+    const synthesisSession = await this.createSession(lm, targetLanguage, supportedLangs);
     try {
       const combinedPrompt = `Synthesize these section notes into a cohesive final meeting summary:
 ${langInstruction}

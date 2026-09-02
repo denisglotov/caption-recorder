@@ -96,6 +96,7 @@ describe('GeminiNanoService', () => {
     let originalWindow: unknown;
 
     beforeEach(() => {
+      GeminiNanoService.clearSupportedLanguagesCache();
       originalWindow = (globalThis as unknown as { window?: unknown }).window;
       (globalThis as unknown as { window: unknown }).window = {
         ai: undefined,
@@ -104,6 +105,7 @@ describe('GeminiNanoService', () => {
     });
 
     afterEach(() => {
+      GeminiNanoService.clearSupportedLanguagesCache();
       if (originalWindow !== undefined) {
         (globalThis as unknown as { window: unknown }).window = originalWindow;
       } else {
@@ -219,6 +221,21 @@ describe('GeminiNanoService', () => {
 
       expect(capturedPrompt).toContain('Russian');
       expect(result).toBe(russianSummary);
+
+      // Verify that expectedOutputs passed to create only contains Chrome-supported languages
+      const createMock = (
+        window as unknown as { LanguageModel: { create: ReturnType<typeof vi.fn> } }
+      ).LanguageModel.create;
+      const firstCallArg = createMock.mock.calls[0][0] as {
+        expectedOutputs?: [{ languages: string[] }];
+      };
+      expect(firstCallArg.expectedOutputs).toBeDefined();
+      expect(
+        GeminiNanoService.FALLBACK_SUPPORTED_LANGUAGES.includes(
+          firstCallArg.expectedOutputs![0].languages[0]
+        )
+      ).toBe(true);
+      expect(firstCallArg.expectedOutputs![0].languages[0]).not.toBe('ru');
     });
 
     it('generates appropriate language instructions via getLanguageInstruction', () => {
@@ -229,6 +246,73 @@ describe('GeminiNanoService', () => {
       expect(GeminiNanoService.getLanguageInstruction('fr')).toContain('French');
       expect(GeminiNanoService.getLanguageInstruction('ja')).toContain('Japanese');
       expect(GeminiNanoService.getLanguageInstruction('ru')).toContain('Russian');
+    });
+
+    it('strictly maps output language codes to Prompt API supported codes', () => {
+      expect(GeminiNanoService.getSupportedOutputLanguage('de')).toBe('de');
+      expect(GeminiNanoService.getSupportedOutputLanguage('en')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('es')).toBe('es');
+      expect(GeminiNanoService.getSupportedOutputLanguage('fr')).toBe('fr');
+      expect(GeminiNanoService.getSupportedOutputLanguage('ja')).toBe('ja');
+
+      // Unsupported Prompt API codes fallback to safe allowed code ('en')
+      expect(GeminiNanoService.getSupportedOutputLanguage('ru')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('zh')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('ko')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('it')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('pt')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage('auto')).toBe('en');
+      expect(GeminiNanoService.getSupportedOutputLanguage()).toBe('en');
+    });
+
+    describe('detectSupportedLanguages', () => {
+      it('dynamically parses supported languages from Chrome error message', async () => {
+        const mockLM = {
+          availability: vi
+            .fn()
+            .mockRejectedValue(
+              new Error(
+                'Unsupported LanguageModel API languages were specified, and the request was aborted. Please only specify supported language codes: [de, en, es, fr, it, ja, pt]'
+              )
+            ),
+        };
+
+        const langs = await GeminiNanoService.detectSupportedLanguages(mockLM);
+        expect(langs).toEqual(['de', 'en', 'es', 'fr', 'it', 'ja', 'pt']);
+        expect(GeminiNanoService.getSupportedOutputLanguage('it')).toBe('it');
+        expect(GeminiNanoService.getSupportedOutputLanguage('pt')).toBe('pt');
+      });
+
+      it('reads supported languages directly from capabilities() if exposed', async () => {
+        const mockLM = {
+          capabilities: vi.fn().mockResolvedValue({
+            languages: ['en', 'fr', 'es'],
+          }),
+        };
+
+        const langs = await GeminiNanoService.detectSupportedLanguages(mockLM);
+        expect(langs).toEqual(['en', 'fr', 'es']);
+        expect(GeminiNanoService.getSupportedOutputLanguage('fr')).toBe('fr');
+        expect(GeminiNanoService.getSupportedOutputLanguage('ja')).toBe('en');
+      });
+
+      it('probes candidate languages individually via availability() if error regex does not match', async () => {
+        const mockLM = {
+          availability: vi.fn(async (opts?: { expectedOutputs?: [{ languages: string[] }] }) => {
+            const lang = opts?.expectedOutputs?.[0]?.languages?.[0];
+            if (lang === 'en' || lang === 'ja') return 'readily' as const;
+            throw new Error('Unsupported');
+          }),
+        };
+
+        const langs = await GeminiNanoService.detectSupportedLanguages(mockLM);
+        expect(langs).toEqual(['en', 'ja']);
+      });
+
+      it('falls back to FALLBACK_SUPPORTED_LANGUAGES when no AI is present', async () => {
+        const langs = await GeminiNanoService.detectSupportedLanguages(undefined);
+        expect(langs).toEqual(GeminiNanoService.FALLBACK_SUPPORTED_LANGUAGES);
+      });
     });
   });
 });
