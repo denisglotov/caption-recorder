@@ -38,6 +38,7 @@ export const en: TranslationDict = {
     nonChrome:
       'On-device Gemini Nano is exclusive to Google Chrome. All caption recording and exports work normally.',
     empty: 'No transcript available yet to summarize.',
+    languageAuto: 'Auto (Match meeting)',
   },
   export: {
     title: 'Export Meeting',

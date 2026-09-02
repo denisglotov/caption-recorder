@@ -39,6 +39,7 @@ export const ko: TranslationDict = {
     nonChrome:
       '온디바이스 Gemini Nano는 Google Chrome 전용입니다. 자막 기록과 파일 내보내기는 정상 동작합니다.',
     empty: '요약할 전사 내용이 아직 없습니다.',
+    languageAuto: '자동 (회의 언어)',
   },
   export: {
     title: '회의 내보내기',

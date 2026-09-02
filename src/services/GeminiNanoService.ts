@@ -1,4 +1,4 @@
-import type { AIModelStatus, AISummaryResult, TranscriptSegment } from '../core/types';
+import type { AIModelStatus, TranscriptSegment } from '../core/types';
 
 export interface AISession {
   prompt(text: string): Promise<string>;
@@ -113,14 +113,39 @@ export class GeminiNanoService {
     }
   }
 
+  public static readonly SUPPORTED_LANGUAGES: Record<string, string> = {
+    en: 'English',
+    es: 'Spanish',
+    de: 'German',
+    fr: 'French',
+    ru: 'Russian',
+    ja: 'Japanese',
+    ko: 'Korean',
+    zh: 'Chinese',
+    pt: 'Portuguese',
+    it: 'Italian',
+  };
+
+  /**
+   * Return a prompt instruction specifying the desired summary language.
+   */
+  public static getLanguageInstruction(targetLanguage?: string): string {
+    if (!targetLanguage || targetLanguage === 'auto') {
+      return 'Write the executive summary, key points, and action items in the primary language of the transcript.';
+    }
+    const langName = this.SUPPORTED_LANGUAGES[targetLanguage.toLowerCase()] || targetLanguage;
+    return `Write the entire executive summary, key discussion points, and action items in ${langName}.`;
+  }
+
   /**
    * Generate meeting summary and action items using Chrome's built-in Gemini Nano.
    * Employs smart hierarchical chunking if transcript is long.
    */
   public static async summarizeMeeting(
     segments: TranscriptSegment[],
-    onProgress?: (partialText: string) => void
-  ): Promise<AISummaryResult> {
+    onProgress?: (partialText: string) => void,
+    targetLanguage?: string
+  ): Promise<string> {
     if (segments.length === 0) {
       throw new Error('No transcript segments to summarize.');
     }
@@ -141,41 +166,143 @@ export class GeminiNanoService {
     const fullTranscript = segments.map((s) => `${s.speaker}: ${s.text}`).join('\n');
 
     const wordCount = fullTranscript.split(/\s+/).length;
-    let finalSummary = '';
 
     if (wordCount > 1800) {
       // Long meeting: Hierarchical summarization
       onProgress?.('Analyzing long meeting in sections...\n');
-      finalSummary = await this.hierarchicalSummarize(segments, lm, onProgress);
+      return this.hierarchicalSummarize(segments, lm, onProgress, targetLanguage);
     } else {
       // Standard meeting: Single-pass summarization
-      finalSummary = await this.singlePassSummarize(fullTranscript, lm, onProgress);
+      return this.singlePassSummarize(fullTranscript, lm, onProgress, targetLanguage);
     }
-
-    return this.parseSummaryResult(finalSummary);
   }
 
-  private static async createSession(lm?: AILanguageModel): Promise<AISession> {
-    const systemPrompt =
-      'You are an executive meeting assistant. Provide a concise executive summary, key discussion points, and clear action items with assignees if mentioned. Do not make up facts.';
-    const outputLang = this.getSupportedOutputLanguage();
+  /**
+   * Collect streaming output from either delta chunks (standard Chrome Prompt API)
+   * or cumulative snapshots, guarding against empty terminator chunks.
+   */
+  public static async collectStream(
+    stream: unknown,
+    onProgress?: (accumulated: string) => void
+  ): Promise<string> {
+    if (!stream || typeof stream !== 'object') return '';
+
+    let iterator: AsyncIterable<string>;
+    if (Symbol.asyncIterator in stream) {
+      iterator = stream as AsyncIterable<string>;
+    } else if ('getReader' in stream) {
+      const reader = (stream as ReadableStream<string>).getReader();
+      iterator = {
+        async *[Symbol.asyncIterator]() {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) yield value;
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        },
+      };
+    } else {
+      return '';
+    }
+
+    let accumulated = '';
+    let isCumulative: boolean | null = null;
+
+    for await (const chunk of iterator) {
+      if (!chunk) continue;
+      if (isCumulative === null && accumulated.length > 0) {
+        isCumulative = chunk.startsWith(accumulated);
+      }
+      accumulated = isCumulative ? chunk : accumulated + chunk;
+      onProgress?.(accumulated);
+    }
+
+    return accumulated;
+  }
+
+  /**
+   * Run a prompt on an AI session with streaming and non-streaming fallback.
+   */
+  private static async runPrompt(
+    session: AISession,
+    prompt: string,
+    onProgress?: (partialText: string) => void
+  ): Promise<string> {
+    if (session.promptStreaming) {
+      let accumulated = '';
+      try {
+        const stream = session.promptStreaming(prompt);
+        accumulated = await this.collectStream(stream, onProgress);
+      } catch (streamErr) {
+        console.warn('[GeminiNanoService] Streaming failed, falling back to prompt()', streamErr);
+      }
+
+      if (!accumulated.trim()) {
+        accumulated = await session.prompt(prompt);
+        onProgress?.(accumulated);
+      }
+      return accumulated;
+    }
+
+    const result = await session.prompt(prompt);
+    onProgress?.(result);
+    return result;
+  }
+
+  /**
+   * Creates an AI session, trying candidate options in order of modernity
+   * to maintain compatibility across evolving Chrome Prompt API versions.
+   */
+  private static async createSession(
+    lm?: AILanguageModel,
+    targetLanguage?: string
+  ): Promise<AISession> {
+    const langInstruction = this.getLanguageInstruction(targetLanguage);
+    const systemPrompt = `You are an executive meeting assistant. Provide a concise executive summary, key discussion points, and clear action items with assignees if mentioned. Do not make up facts. ${langInstruction}`;
+    const outputLang =
+      targetLanguage && targetLanguage !== 'auto' && targetLanguage in this.SUPPORTED_LANGUAGES
+        ? targetLanguage
+        : this.getSupportedOutputLanguage();
 
     if (lm?.create) {
-      try {
-        return await lm.create({
+      // Fallbacks ordered by Chrome API revision (Chrome 131+ down to early builds)
+      const candidates: Record<string, unknown>[] = [
+        {
           systemPrompt,
           temperature: 0.2,
           topK: 3,
           expectedInputs: [{ type: 'text', languages: [outputLang] }],
           expectedOutputs: [{ type: 'text', languages: [outputLang] }],
-        });
-      } catch {
-        return await lm.create({
+        },
+        {
           systemPrompt,
           temperature: 0.2,
           topK: 3,
           expectedOutputs: [{ type: 'text', languages: [outputLang] }],
-        });
+        },
+        {
+          systemPrompt,
+          temperature: 0.2,
+          topK: 3,
+        },
+        {
+          initialPrompts: [{ role: 'system', content: systemPrompt }],
+          temperature: 0.2,
+          topK: 3,
+        },
+        {},
+      ];
+
+      for (const config of candidates) {
+        try {
+          return await lm.create(config);
+        } catch {
+          // Try next candidate if unsupported
+        }
       }
     }
 
@@ -191,13 +318,16 @@ export class GeminiNanoService {
   private static async singlePassSummarize(
     transcript: string,
     lm?: AILanguageModel,
-    onProgress?: (partialText: string) => void
+    onProgress?: (partialText: string) => void,
+    targetLanguage?: string
   ): Promise<string> {
-    const session = await this.createSession(lm);
+    const session = await this.createSession(lm, targetLanguage);
+    const langInstruction = this.getLanguageInstruction(targetLanguage);
 
     try {
       const prompt = `Please summarize this meeting transcript:
-Format your response with the following markdown headers:
+${langInstruction}
+Format your response with the following markdown headers (or their translation in the target language):
 ### Executive Summary
 ### Key Discussion Points
 ### Action Items & Decisions
@@ -205,19 +335,7 @@ Format your response with the following markdown headers:
 Transcript:
 ${transcript}`;
 
-      if (session.promptStreaming) {
-        let accumulated = '';
-        const stream = session.promptStreaming(prompt);
-        for await (const chunk of stream) {
-          accumulated = chunk;
-          onProgress?.(accumulated);
-        }
-        return accumulated;
-      } else {
-        const result = await session.prompt(prompt);
-        onProgress?.(result);
-        return result;
-      }
+      return await this.runPrompt(session, prompt, onProgress);
     } finally {
       if (session.destroy) {
         session.destroy();
@@ -228,7 +346,8 @@ ${transcript}`;
   private static async hierarchicalSummarize(
     segments: TranscriptSegment[],
     lm?: AILanguageModel,
-    onProgress?: (partialText: string) => void
+    onProgress?: (partialText: string) => void,
+    targetLanguage?: string
   ): Promise<string> {
     // Break segments into chunks of ~1200 words
     const chunks: string[] = [];
@@ -253,12 +372,13 @@ ${transcript}`;
       chunks.push(currentChunkLines.join('\n'));
     }
 
+    const langInstruction = this.getLanguageInstruction(targetLanguage);
     const chunkSummaries: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       onProgress?.(`Processing section ${i + 1} of ${chunks.length}...\n`);
-      const session = await this.createSession(lm);
+      const session = await this.createSession(lm, targetLanguage);
       try {
-        const prompt = `Provide 3-5 concise bullet points of the main discussions and any tasks in this meeting section:\n\n${chunks[i]}`;
+        const prompt = `Provide 3-5 concise bullet points of the main discussions and any tasks in this meeting section (${langInstruction}):\n\n${chunks[i]}`;
         const partial = await session.prompt(prompt);
         chunkSummaries.push(partial);
       } finally {
@@ -268,9 +388,10 @@ ${transcript}`;
 
     // Synthesize combined chunk summaries
     onProgress?.('Synthesizing final executive summary and action items...\n');
-    const synthesisSession = await this.createSession(lm);
+    const synthesisSession = await this.createSession(lm, targetLanguage);
     try {
       const combinedPrompt = `Synthesize these section notes into a cohesive final meeting summary:
+${langInstruction}
 Format with markdown headers:
 ### Executive Summary
 ### Key Discussion Points
@@ -279,62 +400,9 @@ Format with markdown headers:
 Section notes:
 ${chunkSummaries.join('\n\n')}`;
 
-      if (synthesisSession.promptStreaming) {
-        let accumulated = '';
-        const stream = synthesisSession.promptStreaming(combinedPrompt);
-        for await (const chunk of stream) {
-          accumulated = chunk;
-          onProgress?.(accumulated);
-        }
-        return accumulated;
-      } else {
-        const finalOutput = await synthesisSession.prompt(combinedPrompt);
-        onProgress?.(finalOutput);
-        return finalOutput;
-      }
+      return await this.runPrompt(synthesisSession, combinedPrompt, onProgress);
     } finally {
       if (synthesisSession.destroy) synthesisSession.destroy();
     }
-  }
-
-  private static parseSummaryResult(raw: string): AISummaryResult {
-    const keyPoints: string[] = [];
-    const actionItems: string[] = [];
-    const decisions: string[] = [];
-
-    const lines = raw.split('\n');
-    let currentSection = 'summary';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      const lower = trimmed.toLowerCase();
-      if (lower.includes('key discussion') || lower.includes('key points')) {
-        currentSection = 'points';
-        continue;
-      } else if (lower.includes('action items') || lower.includes('next steps')) {
-        currentSection = 'actions';
-        continue;
-      } else if (lower.includes('decision')) {
-        currentSection = 'decisions';
-        continue;
-      }
-
-      if (trimmed.startsWith('-') || trimmed.startsWith('*') || /^\d+\./.test(trimmed)) {
-        const cleanBullet = trimmed.replace(/^[-*]|\d+\.\s*/, '').trim();
-        if (currentSection === 'points') keyPoints.push(cleanBullet);
-        else if (currentSection === 'actions') actionItems.push(cleanBullet);
-        else if (currentSection === 'decisions') decisions.push(cleanBullet);
-      }
-    }
-
-    return {
-      summary: raw,
-      keyPoints,
-      actionItems,
-      decisions,
-      rawOutput: raw,
-    };
   }
 }

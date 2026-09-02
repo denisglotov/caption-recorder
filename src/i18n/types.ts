@@ -35,6 +35,7 @@ export interface TranslationDict {
     instructions: string;
     nonChrome: string;
     empty: string;
+    languageAuto: string;
   };
   export: {
     title: string;

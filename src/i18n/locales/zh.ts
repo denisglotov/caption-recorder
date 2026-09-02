@@ -37,6 +37,7 @@ export const zh: TranslationDict = {
     instructions: '请启用 chrome://flags/#optimization-guide-on-device-model 并重启 Chrome。',
     nonChrome: '设备端 Gemini Nano 为 Google Chrome 独占。字幕录制和文件导出功能完全正常。',
     empty: '暂无可用文字记录来生成摘要。',
+    languageAuto: '自动（匹配会议语言）',
   },
   export: {
     title: '导出会议记录',

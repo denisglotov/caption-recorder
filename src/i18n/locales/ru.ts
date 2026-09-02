@@ -39,6 +39,7 @@ export const ru: TranslationDict = {
     nonChrome:
       'Локальный Gemini Nano доступен только в Google Chrome. Запись субтитров и экспорт работают штатно.',
     empty: 'Пока нет транскрипта для создания сводки.',
+    languageAuto: 'Авто (как во встрече)',
   },
   export: {
     title: 'Экспорт встречи',

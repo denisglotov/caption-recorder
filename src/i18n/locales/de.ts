@@ -39,6 +39,7 @@ export const de: TranslationDict = {
     nonChrome:
       'Lokales Gemini Nano ist exklusiv für Google Chrome. Aufzeichnung und Export funktionieren normal.',
     empty: 'Noch kein Transkript zum Zusammenfassen vorhanden.',
+    languageAuto: 'Automatisch (wie Meeting)',
   },
   export: {
     title: 'Meeting exportieren',

@@ -39,6 +39,7 @@ export const ja: TranslationDict = {
     nonChrome:
       'オンデバイスGemini NanoはGoogle Chrome限定です。字幕の録音とエクスポートは通常通り動作します。',
     empty: '要約可能な文字起こしがまだありません。',
+    languageAuto: '自動（会議の言語）',
   },
   export: {
     title: '会議をエクスポート',

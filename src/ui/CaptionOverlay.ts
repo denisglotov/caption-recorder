@@ -1,6 +1,10 @@
 import type { PlatformAdapter } from '../adapters/PlatformAdapter';
-import { StreamReconciler } from '../core/StreamReconciler';
-import type { MeetingSession, RecordingStatus } from '../core/types';
+import type {
+  InterimCaption,
+  MeetingSession,
+  RecordingStatus,
+  TranscriptSegment,
+} from '../core/types';
 import { downloadExport, exportToTxt, copyToClipboard, type ExportFormat } from '../core/exporters';
 import { GeminiNanoService } from '../services/GeminiNanoService';
 import { DraftStorageService } from '../services/DraftStorageService';
@@ -9,13 +13,13 @@ import { t } from '../i18n';
 export class CaptionOverlay {
   private shadowRoot: ShadowRoot;
   private adapter: PlatformAdapter;
-  private reconciler: StreamReconciler;
 
   private status: RecordingStatus = 'idle';
   private session: MeetingSession;
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private elapsedSeconds: number = 0;
   private userManuallyStopped: boolean = false;
+  private activeDraft: InterimCaption | null = null;
 
   // DOM element references
   private widgetEl!: HTMLElement;
@@ -31,6 +35,7 @@ export class CaptionOverlay {
   private drawerEl!: HTMLElement;
   private transcriptListEl!: HTMLElement;
   private aiOutputEl!: HTMLElement;
+  private selAILang!: HTMLSelectElement;
   private btnGenerateAI!: HTMLButtonElement;
   private btnCopyAI!: HTMLButtonElement;
   private wordCountStatEl!: HTMLElement;
@@ -46,7 +51,6 @@ export class CaptionOverlay {
   constructor(shadowRoot: ShadowRoot, adapter: PlatformAdapter) {
     this.shadowRoot = shadowRoot;
     this.adapter = adapter;
-    this.reconciler = new StreamReconciler();
 
     const now = Date.now();
     this.session = {
@@ -59,6 +63,7 @@ export class CaptionOverlay {
 
     this.initDOM();
     this.attachEventListeners();
+    this.loadSavedLanguage();
     this.checkCaptionsState();
   }
 
@@ -124,6 +129,19 @@ export class CaptionOverlay {
         <div class="cr-tab-content" id="cr-tab-summary" style="display:none;">
           <div class="cr-ai-notice" id="cr-ai-notice" style="display:none;"></div>
           <div class="cr-ai-actions">
+            <select class="cr-select cr-ai-lang" id="cr-sel-ai-lang" title="Summary Language">
+              <option value="auto">${t('summary.languageAuto')}</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="ru">Русский</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="zh">中文</option>
+              <option value="pt">Português</option>
+              <option value="it">Italiano</option>
+            </select>
             <button class="cr-btn-primary" id="cr-btn-ai-gen">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
               <span>${t('summary.generate')}</span>
@@ -186,6 +204,7 @@ export class CaptionOverlay {
     this.drawerEl = this.shadowRoot.getElementById('cr-drawer')!;
     this.transcriptListEl = this.shadowRoot.getElementById('cr-transcript-list')!;
     this.aiOutputEl = this.shadowRoot.getElementById('cr-ai-output')!;
+    this.selAILang = this.shadowRoot.getElementById('cr-sel-ai-lang') as HTMLSelectElement;
     this.btnGenerateAI = this.shadowRoot.getElementById('cr-btn-ai-gen') as HTMLButtonElement;
     this.btnCopyAI = this.shadowRoot.getElementById('cr-btn-ai-copy') as HTMLButtonElement;
     this.wordCountStatEl = this.shadowRoot.getElementById('cr-stat-words')!;
@@ -212,6 +231,17 @@ export class CaptionOverlay {
     });
 
     // AI Summary
+    this.selAILang?.addEventListener('change', async () => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
+          await chrome.storage.local.set({
+            caption_recorder_summary_lang: this.selAILang.value,
+          });
+        }
+      } catch (err) {
+        console.warn('[CaptionRecorder] Failed to save language preference', err);
+      }
+    });
     this.btnGenerateAI.addEventListener('click', () => this.handleGenerateAI());
     this.btnCopyAI.addEventListener('click', () => this.handleCopyAI());
 
@@ -237,25 +267,10 @@ export class CaptionOverlay {
     // Draggable Widget
     this.initDraggable();
 
-    // Reconciler subscriptions
-    this.reconciler.onSegmentFinalized((segment) => {
-      this.session.segments.push(segment);
-      this.updateStats();
-      this.renderTranscriptList();
-      DraftStorageService.saveDraftDebounced(this.session);
-    });
-
-    this.reconciler.onActiveTurnUpdate((activeSegment) => {
-      if (activeSegment) {
-        this.tickerEl.textContent = `${activeSegment.speaker}: ${activeSegment.text.slice(-25)}`;
-      }
-      this.renderTranscriptList();
-    });
-
     // Monitor captions enabled state
     this.adapter.observe(
       (caption) => {
-        // Update live ticker immediately
+        // Finalized caption
         this.tickerEl.textContent = `${caption.speaker}: ${caption.text.slice(-25)}`;
 
         // Auto-start recording when speech arrives if idle and user hasn't manually stopped
@@ -265,11 +280,39 @@ export class CaptionOverlay {
         }
 
         if (this.status === 'recording') {
-          this.reconciler.ingest(caption);
+          const segment: TranscriptSegment = {
+            id: `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+            speaker: caption.speaker,
+            startTime: caption.timestamp,
+            endTime: caption.timestamp,
+            text: caption.text,
+          };
+          this.session.segments.push(segment);
+          this.updateStats();
+          this.renderTranscriptList();
+          DraftStorageService.saveDraftDebounced(this.session);
         }
       },
       (enabled) => {
         this.updateCaptionsNudge(enabled);
+      },
+      (activeCaption) => {
+        this.activeDraft = activeCaption;
+        if (activeCaption) {
+          this.tickerEl.textContent = `${activeCaption.speaker}: ${activeCaption.text.slice(-25)}`;
+
+          if (this.status === 'idle' && !this.userManuallyStopped) {
+            console.info('[CaptionRecorder] Live draft detected, auto-starting recording session');
+            this.startRecording();
+          }
+        } else if (this.session.segments.length === 0) {
+          this.tickerEl.textContent = t('nudge.noCaptionsYet');
+        }
+
+        if (this.status === 'recording') {
+          this.updateStats();
+          this.renderTranscriptList();
+        }
       }
     );
   }
@@ -298,7 +341,9 @@ export class CaptionOverlay {
       this.dotEl.className = 'cr-dot cr-dot-paused';
       this.btnPause.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
       this.btnPause.title = t('controls.resume');
-      this.reconciler.finalizeActiveTurn();
+      this.adapter.flush?.();
+      this.activeDraft = null;
+      this.renderTranscriptList();
     } else if (this.status === 'paused') {
       this.status = 'recording';
       this.dotEl.className = 'cr-dot cr-dot-rec';
@@ -320,7 +365,8 @@ export class CaptionOverlay {
       this.timerInterval = null;
     }
 
-    this.reconciler.finalizeActiveTurn();
+    this.adapter.flush?.();
+    this.activeDraft = null;
     this.session.endTime = Date.now();
     this.updateStats();
 
@@ -390,7 +436,7 @@ export class CaptionOverlay {
   }
 
   private async handleGenerateAI(): Promise<void> {
-    const segments = this.reconciler.getAllSegments();
+    const segments = this.session.segments;
     if (segments.length === 0) {
       this.aiOutputEl.textContent = t('summary.empty');
       return;
@@ -399,20 +445,46 @@ export class CaptionOverlay {
     this.btnGenerateAI.disabled = true;
     this.aiOutputEl.textContent = t('summary.generating');
 
-    try {
-      const result = await GeminiNanoService.summarizeMeeting(segments, (progress) => {
-        this.aiOutputEl.textContent = progress;
-      });
+    const targetLang = this.selAILang ? this.selAILang.value : 'auto';
 
-      this.session.aiSummary = result.summary;
-      this.aiOutputEl.textContent = result.summary;
-      this.btnCopyAI.style.display = 'inline-flex';
-      DraftStorageService.saveDraftDebounced(this.session);
+    try {
+      const summary = await GeminiNanoService.summarizeMeeting(
+        segments,
+        (progress) => {
+          this.aiOutputEl.textContent = progress;
+        },
+        targetLang
+      );
+
+      if (summary && summary.trim()) {
+        this.session.aiSummary = summary;
+        this.aiOutputEl.textContent = summary;
+        this.btnCopyAI.style.display = 'inline-flex';
+        DraftStorageService.saveDraftDebounced(this.session);
+      } else {
+        this.aiOutputEl.textContent = 'No summary could be generated. Please try again.';
+        this.btnCopyAI.style.display = 'none';
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.aiOutputEl.textContent = `Summary error: ${message}`;
+      this.btnCopyAI.style.display = 'none';
     } finally {
       this.btnGenerateAI.disabled = false;
+    }
+  }
+
+  private async loadSavedLanguage(): Promise<void> {
+    try {
+      if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
+        const stored = await chrome.storage.local.get('caption_recorder_summary_lang');
+        const saved = stored?.caption_recorder_summary_lang;
+        if (saved && this.selAILang) {
+          this.selAILang.value = saved;
+        }
+      }
+    } catch (err) {
+      console.warn('[CaptionRecorder] Failed to load language preference', err);
     }
   }
 
@@ -431,8 +503,10 @@ export class CaptionOverlay {
   }
 
   private renderTranscriptList(): void {
-    const segments = this.reconciler.getAllSegments();
-    if (segments.length === 0) {
+    const segments = this.session.segments;
+    const hasActiveDraft = Boolean(this.activeDraft && this.status === 'recording');
+
+    if (segments.length === 0 && !hasActiveDraft) {
       this.transcriptListEl.innerHTML = `
         <div style="color:#64748b; font-size:12px; text-align:center; padding:20px;">
           ${t('nudge.noCaptionsYet')}
@@ -442,11 +516,9 @@ export class CaptionOverlay {
     }
 
     const baseTime = this.session.startTime;
-    const activeSeg = this.reconciler.getActiveSegment();
 
-    this.transcriptListEl.innerHTML = segments
+    const segmentsHtml = segments
       .map((seg) => {
-        const isActive = activeSeg && activeSeg.id === seg.id;
         const timeDiff = Math.max(0, seg.startTime - baseTime);
         const totalSec = Math.floor(timeDiff / 1000);
         const mm = Math.floor(totalSec / 60)
@@ -455,7 +527,7 @@ export class CaptionOverlay {
         const ss = (totalSec % 60).toString().padStart(2, '0');
 
         return `
-          <div class="cr-turn ${isActive ? 'cr-active-turn' : ''}">
+          <div class="cr-turn">
             <div class="cr-turn-header">
               <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(seg.speaker)}</span>
               <span class="cr-timestamp">${mm}:${ss}</span>
@@ -466,15 +538,45 @@ export class CaptionOverlay {
       })
       .join('');
 
+    let activeDraftHtml = '';
+    if (hasActiveDraft && this.activeDraft) {
+      const timeDiff = Math.max(0, (this.activeDraft.timestamp || Date.now()) - baseTime);
+      const totalSec = Math.floor(timeDiff / 1000);
+      const mm = Math.floor(totalSec / 60)
+        .toString()
+        .padStart(2, '0');
+      const ss = (totalSec % 60).toString().padStart(2, '0');
+
+      activeDraftHtml = `
+        <div class="cr-turn cr-active-turn">
+          <div class="cr-turn-header">
+            <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(this.activeDraft.speaker)}</span>
+            <span class="cr-timestamp">${mm}:${ss}</span>
+          </div>
+          <div class="cr-turn-text">${CaptionOverlay.escapeHtml(this.activeDraft.text)}</div>
+        </div>
+      `;
+    }
+
+    this.transcriptListEl.innerHTML = segmentsHtml + activeDraftHtml;
+
     // Auto-scroll to bottom of transcript
     this.transcriptListEl.scrollTop = this.transcriptListEl.scrollHeight;
   }
 
   private updateStats(): void {
-    const segments = this.reconciler.getAllSegments();
-    const totalWords = segments.reduce((sum, seg) => sum + seg.text.split(/\s+/).length, 0);
+    const segments = this.session.segments;
+    let totalWords = segments.reduce((sum, seg) => sum + seg.text.split(/\s+/).length, 0);
+    let totalTurns = segments.length;
+
+    if (this.activeDraft && this.status === 'recording') {
+      const liveWords = this.activeDraft.text.trim().split(/\s+/).filter(Boolean).length;
+      totalWords += liveWords;
+      totalTurns += 1;
+    }
+
     this.wordCountStatEl.textContent = totalWords.toString();
-    this.turnCountStatEl.textContent = segments.length.toString();
+    this.turnCountStatEl.textContent = totalTurns.toString();
   }
 
   private updateTimerDisplay(): void {

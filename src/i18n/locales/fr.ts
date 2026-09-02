@@ -39,6 +39,7 @@ export const fr: TranslationDict = {
     nonChrome:
       'Gemini Nano local est exclusif à Google Chrome. L’enregistrement et l’export fonctionnent normalement.',
     empty: 'Aucune transcription disponible à résumer pour le moment.',
+    languageAuto: 'Auto (comme la réunion)',
   },
   export: {
     title: 'Exporter la réunion',

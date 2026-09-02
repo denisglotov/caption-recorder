@@ -28,14 +28,6 @@ export type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt';
 
 export type RecordingStatus = 'idle' | 'recording' | 'paused';
 
-export interface AISummaryResult {
-  summary: string;
-  keyPoints: string[];
-  actionItems: string[];
-  decisions: string[];
-  rawOutput: string;
-}
-
 export interface AIModelStatus {
   available: boolean;
   status: 'readily' | 'after-download' | 'no' | 'unsupported-browser';

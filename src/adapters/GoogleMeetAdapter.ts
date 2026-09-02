@@ -9,8 +9,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private onCaptionCallback: ((caption: InterimCaption) => void) | null = null;
   private onCaptionsStateChangeCallback: ((enabled: boolean) => void) | null = null;
+  private onActiveCaptionCallback: ((caption: InterimCaption | null) => void) | null = null;
   private lastKnownCaptionsEnabled: boolean = false;
-  private lastCapturedText: string = '';
+
+  // Active chunk tracking for author-based switching
+  private pendingCaption: { speaker: string; el: HTMLElement; text: string } | null = null;
+  private emittedElements = new WeakSet<HTMLElement>();
+  private lastEmittedText: string = '';
+  private lastEmittedSpeaker: string = '';
 
   // Dedicated Google Meet caption text selectors
   private static readonly CAPTION_TEXT_SELECTORS = [
@@ -79,14 +85,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   }
 
   public isCaptionsEnabled(): boolean {
-    // 1. Dedicated caption container or active caption text elements exist in DOM
     if (
       document.querySelector(`[jsname="dsyhDe"], ${GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING}`)
     ) {
       return true;
     }
 
-    // 2. Check the CC toggle button state via Meet's stable identifiers (jsname or shortcut 'c')
     const ccBtn = document.querySelector<HTMLButtonElement>(
       'button[jsname="r8qRAd"], button[aria-keyshortcuts*="c"]'
     );
@@ -95,12 +99,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   public observe(
     onCaption: (caption: InterimCaption) => void,
-    onCaptionsStateChange?: (enabled: boolean) => void
+    onCaptionsStateChange?: (enabled: boolean) => void,
+    onActiveCaption?: (caption: InterimCaption | null) => void
   ): void {
+    this.stop();
+
     this.onCaptionCallback = onCaption;
     this.onCaptionsStateChangeCallback = onCaptionsStateChange || null;
-
-    this.stop();
+    this.onActiveCaptionCallback = onActiveCaption || null;
 
     // 1. Observe DOM mutations for real-time responsiveness
     this.mutationObserver = new MutationObserver((mutations) => {
@@ -119,10 +125,8 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       this.checkCaptionsState();
     }, 300);
 
-    // Initial check
     this.checkCaptionsState();
 
-    // Console diagnostic helper
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__crDebug = () => this.runDiagnostics();
       console.info(
@@ -140,75 +144,34 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    this.flush();
+    this.onActiveCaptionCallback?.(null);
+    this.pendingCaption = null;
+    this.lastEmittedText = '';
+    this.lastEmittedSpeaker = '';
+    this.emittedElements = new WeakSet<HTMLElement>();
   }
 
-  private handleMutations(mutations: MutationRecord[]): void {
-    if (!this.onCaptionCallback) return;
+  public flush(): void {
+    if (!this.pendingCaption) return;
 
-    for (const mutation of mutations) {
-      const target = mutation.target as HTMLElement | Text;
-      const el =
-        target.nodeType === Node.ELEMENT_NODE ? (target as HTMLElement) : target.parentElement;
+    this.onActiveCaptionCallback?.(null);
+    const { speaker, el, text } = this.pendingCaption;
+    this.pendingCaption = null;
 
-      if (!el || this.isExcluded(el)) continue;
-
-      // Check if target matches caption text element directly or is inside one
-      const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING);
-      if (textEl) {
-        this.processCaptionElement(textEl);
-      }
-    }
-  }
-
-  /**
-   * Scans DOM directly for the latest active caption element
-   */
-  private scanActiveCaptions(): void {
-    if (!this.onCaptionCallback) return;
-
-    const latestEl = this.findLatestCaptionElement();
-    if (latestEl) {
-      this.processCaptionElement(latestEl);
-    }
-  }
-
-  /**
-   * Unified caption processing for both mutation events and scan polling.
-   */
-  private processCaptionElement(textEl: HTMLElement): void {
-    if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
-
-    const text = textEl.textContent?.trim() || '';
-    if (!this.isValidCaptionText(text)) return;
-
-    const speaker = this.extractSpeakerForTextElement(textEl);
-    this.emitCaption(speaker, text);
-  }
-
-  private findLatestCaptionElement(): HTMLElement | null {
-    const textEls = document.querySelectorAll<HTMLElement>(
-      GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
-    );
-
-    for (let i = textEls.length - 1; i >= 0; i--) {
-      const el = textEls[i];
-      if (!this.isExcluded(el)) {
-        const text = el.textContent?.trim() || '';
-        if (text.length > 0 && this.isValidCaptionText(text)) {
-          return el;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private emitCaption(speaker: string, text: string): void {
     const cleanText = text.trim();
-    if (!cleanText || cleanText === this.lastCapturedText) return;
+    if (!cleanText || (speaker === this.lastEmittedSpeaker && cleanText === this.lastEmittedText)) {
+      if (el) this.emittedElements.add(el);
+      return;
+    }
 
-    this.lastCapturedText = cleanText;
-    console.info(`[CaptionRecorder] CC Captured: [${speaker}] ${cleanText}`);
+    if (el) {
+      this.emittedElements.add(el);
+    }
+    this.lastEmittedSpeaker = speaker;
+    this.lastEmittedText = cleanText;
+
+    console.info(`[CaptionRecorder] CC Final Captured: [${speaker}] ${cleanText}`);
 
     this.onCaptionCallback?.({
       speaker: speaker.trim() || 'Speaker',
@@ -222,10 +185,117 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
   }
 
+  private isElementConnected(el?: HTMLElement): boolean {
+    if (!el) return false;
+    if (typeof el.isConnected === 'boolean') {
+      return el.isConnected;
+    }
+    if (
+      typeof document !== 'undefined' &&
+      document.body &&
+      typeof document.body.contains === 'function'
+    ) {
+      return document.body.contains(el);
+    }
+    return true;
+  }
+
+  private handleMutations(mutations: MutationRecord[]): void {
+    if (!this.onCaptionCallback) return;
+
+    if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
+      this.flush();
+    }
+
+    for (const mutation of mutations) {
+      const target = mutation.target as HTMLElement | Text;
+      const el =
+        target.nodeType === Node.ELEMENT_NODE ? (target as HTMLElement) : target.parentElement;
+
+      if (!el || this.isExcluded(el)) continue;
+
+      const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING);
+      if (textEl) {
+        this.processCaptionElement(textEl);
+      }
+    }
+  }
+
+  private scanActiveCaptions(): void {
+    if (!this.onCaptionCallback) return;
+
+    if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
+      this.flush();
+    }
+
+    const textEls = document.querySelectorAll<HTMLElement>(
+      GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
+    );
+
+    if (textEls.length === 0 && this.pendingCaption) {
+      this.flush();
+      return;
+    }
+
+    for (let i = 0; i < textEls.length; i++) {
+      const el = textEls[i];
+      if (!this.isExcluded(el)) {
+        this.processCaptionElement(el);
+      }
+    }
+  }
+
+  private processCaptionElement(textEl: HTMLElement): void {
+    if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
+
+    if (this.emittedElements.has(textEl)) return;
+
+    const text = textEl.textContent?.trim() || '';
+    if (!this.isValidCaptionText(text)) return;
+
+    const speaker = this.extractSpeakerForTextElement(textEl);
+
+    // Skip lingering caption that was already emitted
+    if (speaker === this.lastEmittedSpeaker && text === this.lastEmittedText) {
+      this.emittedElements.add(textEl);
+      return;
+    }
+
+    // If same chunk element and same speaker: update current speech draft
+    if (
+      this.pendingCaption &&
+      this.pendingCaption.el === textEl &&
+      this.pendingCaption.speaker === speaker
+    ) {
+      this.pendingCaption.text = text;
+      this.onActiveCaptionCallback?.({
+        speaker: speaker.trim() || 'Speaker',
+        text,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // Chunk element or author switched: finalize previous chunk immediately
+    this.flush();
+
+    this.pendingCaption = {
+      speaker,
+      el: textEl,
+      text,
+    };
+    this.onActiveCaptionCallback?.({
+      speaker: speaker.trim() || 'Speaker',
+      text,
+      timestamp: Date.now(),
+    });
+  }
+
   private extractSpeakerForTextElement(textEl: HTMLElement): string {
-    // 1. Check parent speech block for speaker selector
     const block =
-      textEl.closest<HTMLElement>('[jsname="dsyhDe"] > div, .nMxHgf, [jscontroller="TEZ40e"]') ||
+      textEl.closest<HTMLElement>(
+        '[jsname="dsyhDe"] > div, .nMcdL, .bj4p3b, .nMxHgf, [jscontroller="TEZ40e"]'
+      ) ||
       textEl.parentElement?.parentElement ||
       textEl.parentElement;
 
@@ -247,7 +317,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private isValidCaptionText(text: string): boolean {
     if (!text || text.length === 0) return false;
 
-    // Filter out Material Icon ligature names (e.g. arrow_drop_down, mic_off)
     if (GoogleMeetAdapter.ICON_FONT_LIGATURES.includes(text.toLowerCase())) {
       return false;
     }
@@ -282,7 +351,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       isCaptionsEnabled: this.isCaptionsEnabled(),
       activeCaptionElementsCount: textEls.length,
       activeCaptionElements: textEls,
-      lastCapturedText: this.lastCapturedText,
+      pendingCaption: this.pendingCaption
+        ? { speaker: this.pendingCaption.speaker, text: this.pendingCaption.text }
+        : null,
+      lastEmittedText: this.lastEmittedText,
     };
 
     console.info('[CaptionRecorder Diagnostics]', result);
