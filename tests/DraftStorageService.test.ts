@@ -145,8 +145,16 @@ describe('DraftStorageService', () => {
     await expect(DraftStorageService.clearDraft()).resolves.not.toThrow();
 
     // 2. Simulating chrome API throwing "Extension context invalidated"
-    (globalThis as unknown as { chrome: { runtime?: { id?: string }; storage: { local: { set: unknown } } } }).chrome.runtime = { id: 'test_id' };
-    (globalThis as unknown as { chrome: { storage: { local: { set: unknown } } } }).chrome.storage.local.set = vi.fn().mockRejectedValue(new Error('Extension context invalidated.'));
+    (
+      globalThis as unknown as {
+        chrome: { runtime?: { id?: string }; storage: { local: { set: unknown } } };
+      }
+    ).chrome.runtime = { id: 'test_id' };
+    (
+      globalThis as unknown as { chrome: { storage: { local: { set: unknown } } } }
+    ).chrome.storage.local.set = vi
+      .fn()
+      .mockRejectedValue(new Error('Extension context invalidated.'));
 
     await expect(DraftStorageService.saveDraftImmediate(session)).resolves.not.toThrow();
     expect(consoleErrorSpy).not.toHaveBeenCalled();

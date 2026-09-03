@@ -90,11 +90,11 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     // 1. Direct Google Meet CC button selectors (universal across locales)
     const directBtn = document.querySelector<HTMLElement>(
       'button[aria-keyshortcuts="c"], ' +
-      'button[aria-keyshortcuts*="c"], ' +
-      'button[jsname="r8qRAd"], ' +
-      'button[data-tooltip-id*="caption" i], ' +
-      'button[data-tooltip*="caption" i], ' +
-      'button[aria-label*="caption" i]'
+        'button[aria-keyshortcuts*="c"], ' +
+        'button[jsname="r8qRAd"], ' +
+        'button[data-tooltip-id*="caption" i], ' +
+        'button[data-tooltip*="caption" i], ' +
+        'button[aria-label*="caption" i]'
     );
     if (directBtn) return directBtn;
 

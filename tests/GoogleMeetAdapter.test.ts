@@ -356,60 +356,56 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(adapter.isCaptionsEnabled()).toBe(true);
 
     // Button aria-pressed="false"
-    (
-      globalThis as unknown as { document: { querySelector: unknown } }
-    ).document.querySelector = vi.fn((sel: string) => {
-      if (sel.includes('r8qRAd')) {
-        return {
-          getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'false' : null),
-          textContent: '',
-        };
-      }
-      return null;
-    });
+    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+      vi.fn((sel: string) => {
+        if (sel.includes('r8qRAd')) {
+          return {
+            getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'false' : null),
+            textContent: '',
+          };
+        }
+        return null;
+      });
     expect(adapter.isCaptionsEnabled()).toBe(false);
 
     // Button with icon text closed_caption (active)
-    (
-      globalThis as unknown as { document: { querySelector: unknown } }
-    ).document.querySelector = vi.fn((sel: string) => {
-      if (sel.includes('r8qRAd')) {
-        return {
-          getAttribute: () => null,
-          textContent: 'closed_caption',
-        };
-      }
-      return null;
-    });
+    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+      vi.fn((sel: string) => {
+        if (sel.includes('r8qRAd')) {
+          return {
+            getAttribute: () => null,
+            textContent: 'closed_caption',
+          };
+        }
+        return null;
+      });
     expect(adapter.isCaptionsEnabled()).toBe(true);
 
     // Button with icon text closed_caption_off (inactive)
-    (
-      globalThis as unknown as { document: { querySelector: unknown } }
-    ).document.querySelector = vi.fn((sel: string) => {
-      if (sel.includes('r8qRAd')) {
-        return {
-          getAttribute: () => null,
-          textContent: 'closed_caption_off',
-        };
-      }
-      return null;
-    });
+    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+      vi.fn((sel: string) => {
+        if (sel.includes('r8qRAd')) {
+          return {
+            getAttribute: () => null,
+            textContent: 'closed_caption_off',
+          };
+        }
+        return null;
+      });
     expect(adapter.isCaptionsEnabled()).toBe(false);
   });
 
   it('notifies onCaptionsStateChange and flushes pending speech when CC is disabled', () => {
     let isCCEnabled = true;
-    (
-      globalThis as unknown as { document: { querySelector: unknown } }
-    ).document.querySelector = vi.fn((sel: string) => {
-      if (sel.includes('r8qRAd')) {
-        return {
-          getAttribute: (attr: string) => (attr === 'aria-pressed' ? String(isCCEnabled) : null),
-        };
-      }
-      return null;
-    });
+    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+      vi.fn((sel: string) => {
+        if (sel.includes('r8qRAd')) {
+          return {
+            getAttribute: (attr: string) => (attr === 'aria-pressed' ? String(isCCEnabled) : null),
+          };
+        }
+        return null;
+      });
 
     const emitted: InterimCaption[] = [];
     const stateChanges: boolean[] = [];
