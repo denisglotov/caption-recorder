@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Enregistreur de sous-titres en direct et exportateur de transcriptions respectueux de la vie privée.",
+    "description": "The description of the extension"
+  }
+}

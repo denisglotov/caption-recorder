@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Registratore di sottotitoli in tempo reale ed esportatore di trascrizioni orientato alla privacy.",
+    "description": "The description of the extension"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "プライバシー優先のリアルタイム字幕録音・文字起こしエクスポートツール。",
+    "description": "The description of the extension"
+  }
+}

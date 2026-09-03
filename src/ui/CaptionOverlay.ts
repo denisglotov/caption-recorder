@@ -82,7 +82,7 @@ export class CaptionOverlay {
         <div class="cr-drawer-header">
           <div class="cr-drawer-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span>CaptionRecorder</span>
+            <span>Caption recorder</span>
           </div>
           <div class="cr-drawer-actions">
             <button class="cr-btn-xs" id="cr-btn-new-meeting" title="${t('controls.newSession')}" style="display:none;">

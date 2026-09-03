@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Grabador de subtítulos en vivo y exportador de transcripciones para Google Meet centrado en la privacidad.",
+    "description": "The description of the extension"
+  }
+}

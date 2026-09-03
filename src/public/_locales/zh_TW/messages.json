@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "注重隱私的 Google Meet 即時字幕記錄與轉錄匯出工具。",
+    "description": "The description of the extension"
+  }
+}

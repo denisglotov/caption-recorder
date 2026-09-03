@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Privacy-first live closed caption recorder and meeting transcript exporter.",
+    "description": "The description of the extension"
+  }
+}

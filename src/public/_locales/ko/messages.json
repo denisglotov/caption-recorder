@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Caption recorder",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "개인정보를 보호하는 Google Meet 실시간 자막 기록 및 전사 내보내기 도구.",
+    "description": "The description of the extension"
+  }
+}
