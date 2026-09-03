@@ -15,8 +15,7 @@ export class CaptionOverlay {
 
   private status: RecordingStatus = 'idle';
   private session: MeetingSession;
-  private timerInterval: ReturnType<typeof setInterval> | null = null;
-  private elapsedSeconds: number = 0;
+  private hasRecorded: boolean = false;
   private activeDraft: InterimCaption | null = null;
   private restorePromise: Promise<void> | null = null;
   private cachedSegmentsHtml: string = '';
@@ -27,7 +26,6 @@ export class CaptionOverlay {
   // DOM element references
   private widgetEl!: HTMLElement;
   private dotEl!: HTMLElement;
-  private timerEl!: HTMLElement;
   private tickerEl!: HTMLElement;
   private btnToggleDrawer!: HTMLButtonElement;
 
@@ -72,7 +70,6 @@ export class CaptionOverlay {
       <div class="cr-widget" id="cr-widget">
         <div class="cr-dot" id="cr-dot"></div>
         <div class="cr-info">
-          <span class="cr-timer" id="cr-timer">00:00:00</span>
           <span class="cr-ticker" id="cr-ticker">${t('nudge.noCaptionsYet')}</span>
         </div>
         <button class="cr-btn-icon" id="cr-btn-drawer" title="${t('controls.openDrawer')}">
@@ -170,7 +167,6 @@ export class CaptionOverlay {
     // Cache elements
     this.widgetEl = this.shadowRoot.getElementById('cr-widget')!;
     this.dotEl = this.shadowRoot.getElementById('cr-dot')!;
-    this.timerEl = this.shadowRoot.getElementById('cr-timer')!;
     this.tickerEl = this.shadowRoot.getElementById('cr-ticker')!;
     this.btnToggleDrawer = this.shadowRoot.getElementById('cr-btn-drawer') as HTMLButtonElement;
 
@@ -337,17 +333,11 @@ export class CaptionOverlay {
     }
 
     this.status = 'recording';
+    this.hasRecorded = true;
     this.session.endTime = undefined;
     this.dotEl.className = 'cr-dot cr-dot-rec';
     this.hideRecoveryBanner();
     this.updateNewMeetingButtons(true);
-
-    if (!this.timerInterval) {
-      this.timerInterval = setInterval(() => {
-        this.elapsedSeconds++;
-        this.updateTimerDisplay();
-      }, 1000);
-    }
   }
 
   private pauseRecording(): void {
@@ -356,13 +346,8 @@ export class CaptionOverlay {
     }
 
     const wasRecording = this.status === 'recording';
-    this.status = this.elapsedSeconds > 0 || this.session.segments.length > 0 ? 'paused' : 'idle';
+    this.status = this.hasRecorded || this.session.segments.length > 0 ? 'paused' : 'idle';
     this.dotEl.className = this.status === 'paused' ? 'cr-dot cr-dot-paused' : 'cr-dot';
-
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
-    }
 
     if (wasRecording) {
       this.adapter.flush?.();
@@ -529,17 +514,6 @@ export class CaptionOverlay {
     return trimmed.split(/\s+/).length;
   }
 
-  private updateTimerDisplay(): void {
-    const h = Math.floor(this.elapsedSeconds / 3600)
-      .toString()
-      .padStart(2, '0');
-    const m = Math.floor((this.elapsedSeconds % 3600) / 60)
-      .toString()
-      .padStart(2, '0');
-    const s = (this.elapsedSeconds % 60).toString().padStart(2, '0');
-    this.timerEl.textContent = `${h}:${m}:${s}`;
-  }
-
   private checkCaptionsState(): void {
     const isEnabled = this.adapter.isCaptionsEnabled();
     this.handleCaptionsStateChange(isEnabled);
@@ -614,14 +588,12 @@ export class CaptionOverlay {
         url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
       };
 
-      const endTime = draft.endTime || draft.savedAt || Date.now();
-      this.elapsedSeconds = Math.max(0, Math.floor((endTime - this.session.startTime) / 1000));
+      this.hasRecorded = draft.segments.length > 0 || Boolean(draft.startTime);
 
       this.cachedSegmentsHtml = '';
       this.cachedSegmentsCount = 0;
       this.cachedFinalizedWords = 0;
       this.cachedSegmentsWordsCount = 0;
-      this.updateTimerDisplay();
       this.updateStats();
       this.renderTranscriptList(true);
 
@@ -635,10 +607,6 @@ export class CaptionOverlay {
       if (draft.endTime) {
         this.status = 'idle';
         this.dotEl.className = 'cr-dot';
-        if (this.timerInterval) {
-          clearInterval(this.timerInterval);
-          this.timerInterval = null;
-        }
         this.showRecoveryBanner(draft);
         // Automatically open the drawer to export tab after page reload if meeting has ended
         this.openDrawer();
@@ -692,10 +660,6 @@ export class CaptionOverlay {
   }
 
   private async resetSession(clearStorage: boolean = true): Promise<void> {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
-    }
     this.adapter.flush?.();
 
     if (clearStorage) {
@@ -712,14 +676,13 @@ export class CaptionOverlay {
       url: typeof window !== 'undefined' ? window.location.href : undefined,
     };
 
-    this.elapsedSeconds = 0;
+    this.hasRecorded = false;
     this.activeDraft = null;
 
     this.cachedSegmentsHtml = '';
     this.cachedSegmentsCount = 0;
     this.cachedFinalizedWords = 0;
     this.cachedSegmentsWordsCount = 0;
-    this.updateTimerDisplay();
     this.updateStats();
     this.renderTranscriptList(true);
     this.hideRecoveryBanner();

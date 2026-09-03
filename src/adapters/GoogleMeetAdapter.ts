@@ -269,8 +269,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     this.lastEmittedSpeaker = speaker;
     this.lastEmittedText = cleanText;
 
-    console.info(`[CaptionRecorder] CC Final Captured: [${speaker}] ${cleanText}`);
-
     this.onCaptionCallback?.({
       speaker: speaker.trim() || 'Speaker',
       text: cleanText,

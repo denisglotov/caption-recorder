@@ -212,9 +212,10 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(session.segments.length).toBe(2);
     expect(session.segments[0].speaker).toBe('Denis');
 
-    // Timer should be restored to 60 seconds: 00:01:00
-    const timerEl = elementsById.get('cr-timer');
-    expect(timerEl?.textContent).toBe('00:01:00');
+    // Clock counter is removed from UI, but recovery banner reflects meeting duration (1m 0s)
+    const recDesc = elementsById.get('cr-recovery-desc');
+    expect(recDesc?.textContent).toContain('1m 0s');
+    expect(elementsById.get('cr-timer')).toBeUndefined();
 
     // Stats should be restored
     const wordCountEl = elementsById.get('cr-stat-words');
@@ -280,10 +281,7 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     // Session is fresh and empty
     const session = (overlay as unknown as { session: MeetingSession }).session;
     expect(session.segments.length).toBe(0);
-    expect((overlay as unknown as { elapsedSeconds: number }).elapsedSeconds).toBe(0);
-
-    const timerEl = elementsById.get('cr-timer');
-    expect(timerEl?.textContent).toBe('00:00:00');
+    expect(elementsById.get('cr-timer')).toBeUndefined();
 
     const turnCountEl = elementsById.get('cr-stat-turns');
     expect(turnCountEl?.textContent).toBe('0');
@@ -448,9 +446,7 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(turnCountEl.textContent).toBe('0');
   });
 
-  it('pauses and resumes time counter when closed captions are toggled in the host app', async () => {
-    vi.useFakeTimers();
-
+  it('pauses and resumes recording state when closed captions are toggled in the host app', async () => {
     let onCaptionsStateChangeCb: (enabled: boolean) => void = () => {};
     mockAdapter.observe = vi.fn((_, stateCb) => {
       if (stateCb) onCaptionsStateChangeCb = stateCb;
@@ -463,36 +459,21 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     await (overlay as unknown as { restorePromise: Promise<void> }).restorePromise;
 
     const dotEl = elementsById.get('cr-dot')!;
-    const timerEl = elementsById.get('cr-timer')!;
 
     // Initial state with CC enabled
     expect((overlay as unknown as { status: string }).status).toBe('recording');
     expect(dotEl.className).toBe('cr-dot cr-dot-rec');
 
-    // Let 3 seconds pass while CC is enabled
-    vi.advanceTimersByTime(3000);
-    expect(timerEl.textContent).toBe('00:00:03');
-
-    // 1. Host disables CC in Meet/Zoom
+    // 1. Host disables CC in Meet/Zoom -> recording state transitions to paused
     onCaptionsStateChangeCb(false);
 
     expect((overlay as unknown as { status: string }).status).toBe('paused');
     expect(dotEl.className).toBe('cr-dot cr-dot-paused');
 
-    // Time advances 5 seconds while CC is disabled -> timer remains paused
-    vi.advanceTimersByTime(5000);
-    expect(timerEl.textContent).toBe('00:00:03');
-
-    // 2. Host re-enables CC in Meet/Zoom
+    // 2. Host re-enables CC in Meet/Zoom -> recording resumes
     onCaptionsStateChangeCb(true);
 
     expect((overlay as unknown as { status: string }).status).toBe('recording');
     expect(dotEl.className).toBe('cr-dot cr-dot-rec');
-
-    // Time advances 2 more seconds -> timer resumes from 00:00:03 to 00:00:05
-    vi.advanceTimersByTime(2000);
-    expect(timerEl.textContent).toBe('00:00:05');
-
-    vi.useRealTimers();
   });
 });
