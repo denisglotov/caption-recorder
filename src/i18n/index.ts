@@ -6,6 +6,9 @@ import { ru } from './locales/ru';
 import { ja } from './locales/ja';
 import { ko } from './locales/ko';
 import { zh } from './locales/zh';
+import { it } from './locales/it';
+import { pt } from './locales/pt';
+import { es } from './locales/es';
 
 export * from './types';
 
@@ -17,6 +20,9 @@ const dictionaries: Record<SupportedLocale, TranslationDict> = {
   ja,
   ko,
   zh,
+  it,
+  pt,
+  es,
 };
 
 /**

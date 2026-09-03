@@ -12,7 +12,7 @@ Zero external framework dependencies. 100% private, on-device processing.
 - **🧩 Multi-Platform Adapter Architecture**: Decoupled `PlatformAdapter` interface.
   - **Google Meet** (`meet.google.com`) active now.
   - **Zoom Web** (`app.zoom.us/wc/*`) & **Microsoft Teams Web** (`teams.microsoft.com/*`) scheduled next.
-- **🌐 Native Multi-Language UI**: Automatically adapts to your browser's language with zero configuration. Supports **English (en)**, **German (de)**, **French (fr)**, **Russian (ru)**, **Japanese (ja)**, **Korean (ko)**, and **Simplified Chinese (zh)**.
+- **🌐 Native Multi-Language UI**: Automatically adapts to your browser's language with zero configuration. Supports **English (en)**, **Spanish (es)**, **Portuguese (pt)**, **Italian (it)**, **German (de)**, **French (fr)**, **Russian (ru)**, **Japanese (ja)**, **Korean (ko)**, and **Simplified Chinese (zh)**.
 - **💾 Crash & Tab Close Recovery**: Continuously mirrors live meeting state to local browser storage. If a tab is closed unexpectedly, the extension toolbar popup allows 1-click recovery and export.
 - **📁 Multi-Format Export**: Export to formatted **Markdown (.md)**, **Plain Text (.txt)**, **SubRip (.srt)**, or **WebVTT (.vtt)** with 1-click clipboard copy.
 - **🌐 Cross-Browser Ready**: Built with WXT to target **Google Chrome**, **Mozilla Firefox**, and **Apple Safari**.

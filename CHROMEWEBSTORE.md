@@ -10,7 +10,7 @@
 - **Extension Name**: CaptionRecorder — Live Captions & Transcripts
 - **Short Description**: Record live closed captions from Google Meet with instant speaker turn tracking, and export to TXT, Markdown, SRT, and WebVTT.
 - **Category**: Productivity / Accessibility
-- **Default Language**: English (UI natively supports EN, DE, FR, RU, JA, KO, ZH)
+- **Default Language**: English (UI natively supports EN, ES, PT, IT, DE, FR, RU, JA, KO, ZH)
 
 
 ## Detailed Description
@@ -22,7 +22,7 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 - ⚡ **Switch-Driven Turn Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the UI ticker while tracking author chunk containers in the DOM, deterministically finalizing turns without stutter or duplicate sentences.
 - 💾 **Unsaved Session & Reload Recovery**: Unexpected disconnect, call end, or page reload? CaptionRecorder buffers your active call to local storage, guarantees turn flushing on unload, and restores your transcript directly in the Meet overlay and toolbar popup.
 - 📁 **Universal Export**: Export your meeting transcripts in seconds to Markdown (.md), Plain Text (.txt), SubRip subtitles (.srt), or WebVTT (.vtt), or copy to clipboard.
-- 🌐 **Natively Multilingual**: Automatically matches your browser's language (English, German, French, Russian, Japanese, Korean, Simplified Chinese).
+- 🌐 **Natively Multilingual**: Automatically matches your browser's language (English, Spanish, Portuguese, Italian, German, French, Russian, Japanese, Korean, Simplified Chinese).
 
 
 ## Permissions Justification
@@ -42,4 +42,4 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 
 ## Version History
 
-- **v1.0.0 (2026-09-03)**: Google Meet caption recording, switch-driven turn finalization, TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 7 native UI languages.
+- **v1.0.0 (2026-09-03)**: Google Meet caption recording, switch-driven turn finalization, TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 10 native UI languages.

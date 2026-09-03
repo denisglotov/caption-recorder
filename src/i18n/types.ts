@@ -49,4 +49,4 @@ export interface TranslationDict {
   };
 }
 
-export type SupportedLocale = 'en' | 'de' | 'fr' | 'ru' | 'ja' | 'ko' | 'zh';
+export type SupportedLocale = 'en' | 'de' | 'fr' | 'ru' | 'ja' | 'ko' | 'zh' | 'it' | 'pt' | 'es';
