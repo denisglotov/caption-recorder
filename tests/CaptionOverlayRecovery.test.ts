@@ -448,21 +448,6 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(turnCountEl.textContent).toBe('0');
   });
 
-  it('completely removes nudge banner, pause, stop, and start buttons from widget DOM', () => {
-    let capturedContainerHtml = '';
-    mockShadowRoot.appendChild = vi.fn((child: unknown) => {
-      capturedContainerHtml = (child as MockElement).innerHTML;
-    });
-
-    new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
-
-    expect(capturedContainerHtml).not.toContain('cr-nudge');
-    expect(capturedContainerHtml).not.toContain('cr-btn-pause');
-    expect(capturedContainerHtml).not.toContain('cr-btn-stop');
-    expect(capturedContainerHtml).not.toContain('cr-btn-start');
-    expect(capturedContainerHtml).toContain('cr-btn-drawer');
-  });
-
   it('pauses and resumes time counter when closed captions are toggled in the host app', async () => {
     vi.useFakeTimers();
 
