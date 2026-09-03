@@ -79,6 +79,28 @@ describe('DraftStorageService', () => {
     expect(mockStorage['caption_recorder_unsaved_draft']).toBeDefined();
   });
 
+  it('resolves all debounced promises without hanging when multiple calls are debounced', async () => {
+    const session = createTestSession();
+
+    let p1Resolved = false;
+    let p2Resolved = false;
+
+    DraftStorageService.saveDraftDebounced(session, 500).then(() => {
+      p1Resolved = true;
+    });
+    DraftStorageService.saveDraftDebounced(session, 500).then(() => {
+      p2Resolved = true;
+    });
+
+    expect(p1Resolved).toBe(false);
+    expect(p2Resolved).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(p1Resolved).toBe(true);
+    expect(p2Resolved).toBe(true);
+  });
+
   it('cancels pending debounced save when saveDraftImmediate is called', async () => {
     const session1 = createTestSession();
     session1.title = 'Old Title';

@@ -13,7 +13,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private lastKnownCaptionsEnabled: boolean = false;
 
   // Active chunk tracking for author-based switching
-  private pendingCaption: { speaker: string; el: HTMLElement; text: string } | null = null;
+  private pendingCaption: {
+    speaker: string;
+    el: HTMLElement;
+    text: string;
+    startTime: number;
+  } | null = null;
   private emittedElements = new WeakSet<HTMLElement>();
   private lastEmittedText: string = '';
   private lastEmittedSpeaker: string = '';
@@ -35,7 +40,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     '[jsname="WqqAi"]',
     '.zs7Du',
     '.poVWob',
-    'span[jsname="WqqAi"]',
   ];
 
   // Exclude non-caption UI containers from caption extraction
@@ -80,7 +84,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   public matchesUrl(url: string): boolean {
     return (
       /^https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i.test(url) ||
-      url.includes('meet.google.com')
+      /^https?:\/\/meet\.google\.com\/(_meet|lookup)\//i.test(url)
     );
   }
 
@@ -242,6 +246,9 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       document.removeEventListener('click', this.handleUserInteraction);
       document.removeEventListener('keyup', this.handleKeyup);
     }
+    if (typeof window !== 'undefined') {
+      delete (window as unknown as Record<string, unknown>).__crDebug;
+    }
     this.flush();
     this.onActiveCaptionCallback?.(null);
     this.pendingCaption = null;
@@ -254,7 +261,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.pendingCaption) return;
 
     this.onActiveCaptionCallback?.(null);
-    const { speaker, el, text } = this.pendingCaption;
+    const { speaker, el, text, startTime } = this.pendingCaption;
     this.pendingCaption = null;
 
     const cleanText = text.trim();
@@ -269,10 +276,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     this.lastEmittedSpeaker = speaker;
     this.lastEmittedText = cleanText;
 
+    const now = Date.now();
     this.onCaptionCallback?.({
       speaker: speaker.trim() || 'Speaker',
       text: cleanText,
-      timestamp: Date.now(),
+      startTime: startTime || now,
+      timestamp: now,
     });
   }
 
@@ -313,6 +322,13 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING);
       if (textEl) {
         this.processCaptionElement(textEl);
+      } else if (mutation.type === 'childList' && typeof el.querySelectorAll === 'function') {
+        const nestedTextEls = el.querySelectorAll<HTMLElement>(
+          GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
+        );
+        for (let i = 0; i < nestedTextEls.length; i++) {
+          this.processCaptionElement(nestedTextEls[i]);
+        }
       }
     }
   }
@@ -374,6 +390,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       this.onActiveCaptionCallback?.({
         speaker: speaker.trim() || 'Speaker',
         text,
+        startTime: this.pendingCaption.startTime,
         timestamp: Date.now(),
       });
       return;
@@ -382,15 +399,18 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     // Chunk element or author switched: finalize previous chunk immediately
     this.flush();
 
+    const now = Date.now();
     this.pendingCaption = {
       speaker,
       el: textEl,
       text,
+      startTime: now,
     };
     this.onActiveCaptionCallback?.({
       speaker: speaker.trim() || 'Speaker',
       text,
-      timestamp: Date.now(),
+      startTime: now,
+      timestamp: now,
     });
   }
 

@@ -434,4 +434,51 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted.length).toBe(1);
     expect(emitted[0].text).toBe('Speech before user turns off CC');
   });
+
+  it('matches valid meeting room URLs and rejects non-meeting pages', () => {
+    expect(adapter.matchesUrl('https://meet.google.com/abc-defg-hij')).toBe(true);
+    expect(adapter.matchesUrl('https://meet.google.com/_meet/abc-defg-hij')).toBe(true);
+    expect(adapter.matchesUrl('https://meet.google.com/lookup/team-standup')).toBe(true);
+    expect(adapter.matchesUrl('https://meet.google.com/')).toBe(false);
+    expect(adapter.matchesUrl('https://meet.google.com/landing')).toBe(false);
+    expect(adapter.matchesUrl('https://google.com')).toBe(false);
+  });
+
+  it('tracks speech startTime on pending captions and preserves it when finalized', () => {
+    const emitted: InterimCaption[] = [];
+    const activeDrafts: (InterimCaption | null)[] = [];
+
+    adapter.observe(
+      (cap) => emitted.push(cap),
+      undefined,
+      (active) => activeDrafts.push(active)
+    );
+
+    const { textEl } = createMockCaptionElement('Start of speech', 'Denis');
+
+    vi.setSystemTime(10000);
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+
+    expect(activeDrafts[0]?.startTime).toBe(10000);
+
+    // Evolve draft 500ms later
+    vi.setSystemTime(10500);
+    textEl.textContent = 'Start of speech continuing';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+
+    expect(activeDrafts[1]?.startTime).toBe(10000);
+    expect(activeDrafts[1]?.timestamp).toBe(10500);
+
+    // Flush at 11000ms
+    vi.setSystemTime(11000);
+    adapter.flush();
+
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].startTime).toBe(10000);
+    expect(emitted[0].timestamp).toBe(11000);
+  });
 });

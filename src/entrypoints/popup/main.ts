@@ -21,6 +21,8 @@ function localizeUI() {
   setTxt('lbl-speakers', `${t('recovery.speakers')}:`);
   setTxt('btn-save-draft', t('recovery.download'));
   setTxt('btn-discard-draft', t('recovery.discard'));
+  setTxt('txt-idle-title', t('popup.idleTitle'));
+  setTxt('txt-idle-desc', t('popup.idleDesc'));
 }
 
 async function checkUnsavedDraft() {
@@ -55,7 +57,7 @@ async function checkUnsavedDraft() {
   if (valDur) valDur.textContent = durationStr;
 
   const valSpeakers = document.getElementById('val-speakers');
-  if (valSpeakers) valSpeakers.textContent = speakers.join(', ') || '1';
+  if (valSpeakers) valSpeakers.textContent = speakers.join(', ') || '-';
 
   // Bind Export & Save
   const btnSave = document.getElementById('btn-save-draft');
@@ -95,7 +97,7 @@ async function handleExportDraft(session: MeetingSession) {
   if (idleTitle) {
     idleTitle.textContent = t('recovery.saved');
     setTimeout(() => {
-      idleTitle.textContent = 'Ready for Meetings';
+      idleTitle.textContent = t('popup.idleTitle');
     }, 3000);
   }
 }

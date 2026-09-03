@@ -1,6 +1,6 @@
-import type { MeetingSession } from './types';
+import type { MeetingSession, ExportFormat } from './types';
 
-export type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt';
+export type { ExportFormat };
 
 export interface ExportData {
   filename: string;
@@ -149,7 +149,11 @@ export function exportToVtt(session: MeetingSession): string {
  */
 export function exportSession(session: MeetingSession, format: ExportFormat): ExportData {
   const dateStr = new Date(session.startTime).toISOString().slice(0, 10);
-  const cleanTitle = (session.title || 'Meeting').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const rawTitle = (session.title || 'Meeting')
+    .replace(/[^\p{L}\p{N}_-]/gu, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  const cleanTitle = rawTitle || 'Meeting';
   const filename = `CaptionRecorder_${cleanTitle}_${dateStr}.${format}`;
 
   switch (format) {
@@ -196,8 +200,12 @@ export function downloadExport(session: MeetingSession, format: ExportFormat): v
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fallback to execCommand if navigator.clipboard failed (e.g., focus lost)
+      }
     }
     const textarea = document.createElement('textarea');
     textarea.value = text;

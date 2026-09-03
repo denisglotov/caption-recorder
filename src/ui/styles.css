@@ -123,14 +123,6 @@
   color: #fff;
 }
 
-.cr-btn-rec {
-  background: #ef4444;
-  color: white;
-}
-.cr-btn-rec:hover {
-  background: #dc2626;
-}
-
 /* Drawer / Modal Container */
 .cr-drawer {
   position: fixed;
@@ -297,11 +289,6 @@
   background: #4338ca;
 }
 
-.cr-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .cr-btn-secondary {
   background: rgba(255, 255, 255, 0.08);
   color: #e2e8f0;
@@ -425,18 +412,6 @@
 }
 .cr-btn-xs:hover {
   background: rgba(255, 255, 255, 0.16);
-}
-
-.cr-btn-sm {
-  border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: all 0.15s ease;
 }
 
 .cr-btn-danger {

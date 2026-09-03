@@ -1,25 +1,12 @@
 import type { TranslationDict } from '../types';
 
 export const es: TranslationDict = {
-  status: {
-    idle: 'En espera',
-    recording: 'Grabando',
-    paused: 'En pausa',
-  },
   controls: {
-    start: 'Iniciar grabación',
-    pause: 'Pausar',
-    resume: 'Reanudar',
-    stop: 'Detener grabación',
     openDrawer: 'Abrir panel',
     closeDrawer: 'Cerrar panel',
-    minimize: 'Minimizar',
-    maximize: 'Expandir',
     newSession: 'Nueva reunión',
   },
   nudge: {
-    ccOff: 'Los subtítulos están desactivados. Activa los subtítulos (CC) en Meet para grabar.',
-    ccActive: 'Subtítulos activos',
     noCaptionsYet: 'Esperando voz...',
   },
   tabs: {
@@ -27,11 +14,6 @@ export const es: TranslationDict = {
     export: 'Exportar',
   },
   export: {
-    title: 'Exportar reunión',
-    downloadTxt: 'Descargar texto plano (.txt)',
-    downloadMd: 'Descargar Markdown (.md)',
-    downloadSrt: 'Descargar subtítulos (.srt)',
-    downloadVtt: 'Descargar subtítulos (.vtt)',
     copyClipboard: 'Copiar transcripción al portapapeles',
     copied: '¡Transcripción copiada al portapapeles!',
     totalWords: 'Palabras totales',
@@ -46,7 +28,10 @@ export const es: TranslationDict = {
     download: 'Exportar y guardar',
     discard: 'Descartar',
     discardConfirm: '¿Estás seguro de que deseas descartar esta reunión no guardada?',
-    noDraft: 'No hay reuniones sin guardar. Abre Google Meet para comenzar a grabar.',
     saved: '¡Borrador guardado y eliminado!',
+  },
+  popup: {
+    idleTitle: 'Listo para reuniones',
+    idleDesc: 'Abre Google Meet para grabar automáticamente subtítulos en vivo.',
   },
 };

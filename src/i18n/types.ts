@@ -1,23 +1,10 @@
 export interface TranslationDict {
-  status: {
-    idle: string;
-    recording: string;
-    paused: string;
-  };
   controls: {
-    start: string;
-    pause: string;
-    resume: string;
-    stop: string;
     openDrawer: string;
     closeDrawer: string;
-    minimize: string;
-    maximize: string;
     newSession: string;
   };
   nudge: {
-    ccOff: string;
-    ccActive: string;
     noCaptionsYet: string;
   };
   tabs: {
@@ -25,11 +12,6 @@ export interface TranslationDict {
     export: string;
   };
   export: {
-    title: string;
-    downloadTxt: string;
-    downloadMd: string;
-    downloadSrt: string;
-    downloadVtt: string;
     copyClipboard: string;
     copied: string;
     totalWords: string;
@@ -44,8 +26,11 @@ export interface TranslationDict {
     download: string;
     discard: string;
     discardConfirm: string;
-    noDraft: string;
     saved: string;
+  };
+  popup: {
+    idleTitle: string;
+    idleDesc: string;
   };
 }
 

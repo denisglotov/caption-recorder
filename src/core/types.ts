@@ -10,7 +10,7 @@ export interface InterimCaption {
   speaker: string;
   text: string;
   timestamp: number;
-  containerId?: string;
+  startTime?: number;
 }
 
 export interface MeetingSession {

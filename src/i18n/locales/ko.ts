@@ -1,25 +1,12 @@
 import type { TranslationDict } from '../types';
 
 export const ko: TranslationDict = {
-  status: {
-    idle: '대기 중',
-    recording: '기록 중',
-    paused: '일시 정지',
-  },
   controls: {
-    start: '기록 시작',
-    pause: '일시 정지',
-    resume: '다시 시작',
-    stop: '기록 중지',
     openDrawer: '패널 열기',
     closeDrawer: '패널 닫기',
-    minimize: '최소화',
-    maximize: '확대',
     newSession: '새 회의',
   },
   nudge: {
-    ccOff: '자막이 꺼져 있습니다. 기록하려면 Meet에서 자막(CC)을 켜세요.',
-    ccActive: '자막 활성화됨',
     noCaptionsYet: '대화 대기 중...',
   },
   tabs: {
@@ -27,11 +14,6 @@ export const ko: TranslationDict = {
     export: '내보내기',
   },
   export: {
-    title: '회의 내보내기',
-    downloadTxt: '텍스트 파일 다운로드 (.txt)',
-    downloadMd: '마크다운 다운로드 (.md)',
-    downloadSrt: '자막 파일 다운로드 (.srt)',
-    downloadVtt: '자막 파일 다운로드 (.vtt)',
     copyClipboard: '클립보드에 복사',
     copied: '전사 내용이 클립보드에 복사되었습니다!',
     totalWords: '총 단어 수',
@@ -46,7 +28,10 @@ export const ko: TranslationDict = {
     download: '내보내기 및 저장',
     discard: '삭제',
     discardConfirm: '저장되지 않은 회의 데이터를 삭제하시겠습니까?',
-    noDraft: '저장되지 않은 회의가 없습니다. Google Meet을 열어 기록을 시작하세요.',
     saved: '임시 저장 데이터가 저장 및 정리되었습니다!',
+  },
+  popup: {
+    idleTitle: '회의 준비 완료',
+    idleDesc: 'Google Meet을 열어 실시간 자막을 자동으로 기록하세요.',
   },
 };

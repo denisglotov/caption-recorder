@@ -8,11 +8,12 @@ describe('i18n subsystem', () => {
 
   it('translates keys and reflects locale changes', () => {
     setLocale('en');
-    expect(t('controls.start')).toBe('Start Recording');
-    expect(t('status.recording')).toBe('Recording');
+    expect(t('controls.newSession')).toBe('New Meeting');
     expect(t('tabs.live')).toBe('Live Transcript');
+    expect(t('popup.idleTitle')).toBe('Ready for Meetings');
 
     setLocale('de');
-    expect(t('controls.start')).toBe('Aufnahme starten');
+    expect(t('controls.newSession')).toBe('Neues Meeting');
+    expect(t('popup.idleTitle')).toBe('Bereit für Meetings');
   });
 });

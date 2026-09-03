@@ -4,6 +4,7 @@ const DRAFT_KEY = 'caption_recorder_unsaved_draft';
 
 export class DraftStorageService {
   private static saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private static pendingResolves: (() => void)[] = [];
 
   /**
    * Check if Chrome extension context is still valid.
@@ -36,9 +37,10 @@ export class DraftStorageService {
     }
 
     return new Promise((resolve) => {
+      this.pendingResolves.push(resolve);
       this.saveTimeout = setTimeout(async () => {
+        this.saveTimeout = null;
         await this.saveDraftImmediate(session);
-        resolve();
       }, delayMs);
     });
   }
@@ -52,7 +54,11 @@ export class DraftStorageService {
       this.saveTimeout = null;
     }
 
+    const currentResolves = this.pendingResolves;
+    this.pendingResolves = [];
+
     if (!this.isContextValid()) {
+      currentResolves.forEach((r) => r());
       return;
     }
 
@@ -69,6 +75,8 @@ export class DraftStorageService {
         return;
       }
       console.error('Failed to save draft to storage', err);
+    } finally {
+      currentResolves.forEach((r) => r());
     }
   }
 
@@ -104,6 +112,10 @@ export class DraftStorageService {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
     }
+
+    const currentResolves = this.pendingResolves;
+    this.pendingResolves = [];
+    currentResolves.forEach((r) => r());
 
     if (!this.isContextValid()) {
       return;

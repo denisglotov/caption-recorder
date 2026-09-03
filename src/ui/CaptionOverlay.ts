@@ -51,15 +51,15 @@ export class CaptionOverlay {
       title: document.title || 'Google Meet',
       startTime: now,
       segments: [],
-      platform: 'google-meet',
+      platform: this.adapter.platformId,
       url: typeof window !== 'undefined' ? window.location.href : undefined,
     };
 
     this.initDOM();
+    this.restorePromise = this.restoreDraftSession();
     this.attachEventListeners();
     this.checkCaptionsState();
     this.updateStats();
-    this.restorePromise = this.restoreDraftSession();
   }
 
   private initDOM(): void {
@@ -201,12 +201,14 @@ export class CaptionOverlay {
     this.shadowRoot.getElementById('cr-btn-copy-all')?.addEventListener('click', async () => {
       const success = await copyToClipboard(exportToTxt(this.session));
       if (success) {
-        const btn = this.shadowRoot.getElementById('cr-btn-copy-all')!;
-        const originalText = btn.textContent;
-        btn.textContent = t('export.copied');
-        setTimeout(() => {
-          btn.textContent = originalText;
-        }, 2000);
+        const span = this.shadowRoot.getElementById('cr-btn-copy-all')?.querySelector('span');
+        if (span) {
+          const originalText = span.textContent;
+          span.textContent = t('export.copied');
+          setTimeout(() => {
+            span.textContent = originalText;
+          }, 2000);
+        }
       }
     });
 
@@ -249,7 +251,7 @@ export class CaptionOverlay {
           if (!DraftStorageService.isContextValid()) return;
           if (areaName === 'local' && changes['caption_recorder_unsaved_draft']) {
             if (!changes['caption_recorder_unsaved_draft'].newValue) {
-              if (this.status === 'idle' && this.session.segments.length > 0) {
+              if (this.status !== 'recording' && this.session.segments.length > 0) {
                 this.resetSession(false);
               }
             }
@@ -281,7 +283,7 @@ export class CaptionOverlay {
         const segment: TranscriptSegment = {
           id: `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
           speaker: caption.speaker,
-          startTime: caption.timestamp,
+          startTime: caption.startTime || caption.timestamp,
           endTime: caption.timestamp,
           text: caption.text,
         };
@@ -328,6 +330,8 @@ export class CaptionOverlay {
   }
 
   private resumeRecording(): void {
+    this.hideRecoveryBanner();
+
     if (this.status === 'recording') {
       return;
     }
@@ -336,7 +340,6 @@ export class CaptionOverlay {
     this.hasRecorded = true;
     this.session.endTime = undefined;
     this.dotEl.className = 'cr-dot cr-dot-rec';
-    this.hideRecoveryBanner();
     this.updateNewMeetingButtons(true);
   }
 
@@ -423,18 +426,15 @@ export class CaptionOverlay {
 
     let activeDraftHtml = '';
     if (hasActiveDraft && this.activeDraft) {
-      const timeDiff = Math.max(0, (this.activeDraft.timestamp || Date.now()) - baseTime);
-      const totalSec = Math.floor(timeDiff / 1000);
-      const mm = Math.floor(totalSec / 60)
-        .toString()
-        .padStart(2, '0');
-      const ss = (totalSec % 60).toString().padStart(2, '0');
+      const timeStr = CaptionOverlay.formatElapsed(
+        (this.activeDraft.timestamp || Date.now()) - baseTime
+      );
 
       activeDraftHtml = `
         <div class="cr-turn cr-active-turn">
           <div class="cr-turn-header">
             <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(this.activeDraft.speaker)}</span>
-            <span class="cr-timestamp">${mm}:${ss}</span>
+            <span class="cr-timestamp">${timeStr}</span>
           </div>
           <div class="cr-turn-text">${CaptionOverlay.escapeHtml(this.activeDraft.text)}</div>
         </div>
@@ -461,22 +461,30 @@ export class CaptionOverlay {
   }
 
   private buildSegmentHtml(seg: TranscriptSegment, baseTime: number): string {
-    const timeDiff = Math.max(0, seg.startTime - baseTime);
-    const totalSec = Math.floor(timeDiff / 1000);
-    const mm = Math.floor(totalSec / 60)
-      .toString()
-      .padStart(2, '0');
-    const ss = (totalSec % 60).toString().padStart(2, '0');
+    const timeStr = CaptionOverlay.formatElapsed(seg.startTime - baseTime);
 
     return `
       <div class="cr-turn">
         <div class="cr-turn-header">
           <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(seg.speaker)}</span>
-          <span class="cr-timestamp">${mm}:${ss}</span>
+          <span class="cr-timestamp">${timeStr}</span>
         </div>
         <div class="cr-turn-text">${CaptionOverlay.escapeHtml(seg.text)}</div>
       </div>
     `;
+  }
+
+  private static formatElapsed(timeDiffMs: number): string {
+    const totalSec = Math.max(0, Math.floor(timeDiffMs / 1000));
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    const seconds = totalSec % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    return `${pad(minutes)}:${pad(seconds)}`;
   }
 
   private updateStats(): void {
@@ -507,10 +515,23 @@ export class CaptionOverlay {
     this.turnCountStatEl.textContent = totalTurns.toString();
   }
 
+  private static segmenter: Intl.Segmenter | null =
+    typeof Intl !== 'undefined' && 'Segmenter' in Intl
+      ? new Intl.Segmenter(undefined, { granularity: 'word' })
+      : null;
+
   private static countWords(text?: string): number {
     if (!text) return 0;
     const trimmed = text.trim();
     if (!trimmed) return 0;
+
+    if (CaptionOverlay.segmenter) {
+      let count = 0;
+      for (const seg of CaptionOverlay.segmenter.segment(trimmed)) {
+        if (seg.isWordLike) count++;
+      }
+      return count;
+    }
     return trimmed.split(/\s+/).length;
   }
 
@@ -672,7 +693,7 @@ export class CaptionOverlay {
       title: document.title || 'Google Meet',
       startTime: now,
       segments: [],
-      platform: 'google-meet',
+      platform: this.adapter.platformId,
       url: typeof window !== 'undefined' ? window.location.href : undefined,
     };
 
@@ -692,6 +713,7 @@ export class CaptionOverlay {
 
     const isEnabled = this.adapter.isCaptionsEnabled();
     if (isEnabled) {
+      this.status = 'idle';
       this.resumeRecording();
     } else {
       this.status = 'idle';

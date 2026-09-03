@@ -89,4 +89,15 @@ describe('Exporters', () => {
     expect(vttExport.filename).toMatch(/^CaptionRecorder_Product_Sync_\d{4}-\d{2}-\d{2}\.vtt$/);
     expect(vttExport.mimeType).toBe('text/vtt');
   });
+
+  it('preserves Unicode characters in exported filenames', () => {
+    const unicodeSession: MeetingSession = {
+      ...sampleSession,
+      title: 'Синхрон команды & Réunion de projet',
+    };
+    const exported = exportSession(unicodeSession, 'txt');
+    expect(exported.filename).toMatch(
+      /^CaptionRecorder_Синхрон_команды_Réunion_de_projet_\d{4}-\d{2}-\d{2}\.txt$/
+    );
+  });
 });

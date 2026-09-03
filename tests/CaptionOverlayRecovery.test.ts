@@ -476,4 +476,44 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect((overlay as unknown as { status: string }).status).toBe('recording');
     expect(dotEl.className).toBe('cr-dot cr-dot-rec');
   });
+
+  it('formats elapsed timestamps with hours when >= 3600 seconds', () => {
+    const formatElapsed = (CaptionOverlay as unknown as { formatElapsed: (ms: number) => string })
+      .formatElapsed;
+    expect(formatElapsed(65000)).toBe('01:05');
+    expect(formatElapsed(3665000)).toBe('01:01:05');
+  });
+
+  it('resets overlay session when draft is cleared from storage while in paused state', async () => {
+    let storageChangedListener: (
+      changes: Record<string, { newValue?: unknown }>,
+      area: string
+    ) => void = () => {};
+    (
+      globalThis as unknown as {
+        chrome: { storage: { onChanged: { addListener: (cb: unknown) => void } } };
+      }
+    ).chrome.storage.onChanged = {
+      addListener: (cb: unknown) => {
+        storageChangedListener = cb as typeof storageChangedListener;
+      },
+    };
+
+    const draft = createSavedMeetingDraft();
+    await DraftStorageService.saveDraftImmediate(draft);
+
+    mockAdapter.isCaptionsEnabled = () => false;
+
+    const overlay = new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
+    await (overlay as unknown as { restorePromise: Promise<void> }).restorePromise;
+
+    (overlay as unknown as { status: string }).status = 'paused';
+    expect((overlay as unknown as { session: MeetingSession }).session.segments.length).toBe(2);
+
+    // Popup clears draft in local storage
+    storageChangedListener({ caption_recorder_unsaved_draft: { newValue: undefined } }, 'local');
+
+    // Overlay session is reset
+    expect((overlay as unknown as { session: MeetingSession }).session.segments.length).toBe(0);
+  });
 });
