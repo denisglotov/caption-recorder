@@ -9,7 +9,7 @@ export default defineConfig({
   manifest: {
     name: 'CaptionRecorder',
     description: 'Privacy-first live closed caption recorder and meeting transcript exporter.',
-    version: '1.0.0',
+    version: '1.1.0',
     permissions: ['storage'],
     host_permissions: ['https://meet.google.com/*'],
     action: {

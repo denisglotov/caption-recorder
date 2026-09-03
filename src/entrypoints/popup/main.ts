@@ -23,6 +23,14 @@ function localizeUI() {
   setTxt('btn-discard-draft', t('recovery.discard'));
   setTxt('txt-idle-title', t('popup.idleTitle'));
   setTxt('txt-idle-desc', t('popup.idleDesc'));
+
+  const manifest =
+    typeof chrome !== 'undefined' && chrome.runtime?.getManifest
+      ? chrome.runtime.getManifest()
+      : null;
+  if (manifest?.version) {
+    setTxt('brand-version', `v${manifest.version}`);
+  }
 }
 
 async function checkUnsavedDraft() {

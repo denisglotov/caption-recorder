@@ -1,9 +1,8 @@
 # Chrome Web Store Listing: CaptionRecorder
 
 **Last Updated**: 2026-09-03  
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Target Browser**: Chrome (Manifest V3), Firefox (Manifest V3), Safari  
-
 
 ## Listing Metadata
 
@@ -42,4 +41,5 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 
 ## Version History
 
+- **v1.1.0 (2026-09-03)**: Accurate subtitle timing via speech start tracking, Unicode meeting export support, CJK word counting with Intl.Segmenter, localized popup idle state, memory leak and UI fixes, and pruned bundle.
 - **v1.0.0 (2026-09-03)**: Google Meet caption recording, switch-driven turn finalization, TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 10 native UI languages.
