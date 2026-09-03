@@ -325,4 +325,132 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(session.segments[2].speaker).toBe('Bob');
     expect(session.segments[2].text).toBe('Resumed meeting turn');
   });
+
+  it('optimizes transcript rendering by skipping DOM updates when drawer is closed and caching finalized segments', async () => {
+    let onCaptionCb: (cap: InterimCaption) => void = () => {};
+    let onActiveCaptionCb: (cap: InterimCaption | null) => void = () => {};
+    mockAdapter.observe = vi.fn((cb, _, activeCb) => {
+      onCaptionCb = cb;
+      if (activeCb) onActiveCaptionCb = activeCb;
+    });
+
+    const overlay = new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
+    await (overlay as unknown as { restorePromise: Promise<void> }).restorePromise;
+
+    const drawerEl = elementsById.get('cr-drawer')!;
+    const transcriptListEl = elementsById.get('cr-transcript-list')!;
+    expect(drawerEl.classList.contains('cr-open')).toBe(false);
+
+    // Set a sentinel string in the transcript DOM
+    transcriptListEl.innerHTML = 'SENTINEL_CLOSED_DRAWER';
+
+    (overlay as unknown as { status: string }).status = 'recording';
+
+    // Incoming interim caption while drawer is closed
+    await onActiveCaptionCb({
+      speaker: 'Denis',
+      text: 'Speaking while drawer is closed',
+      timestamp: 2000,
+    });
+
+    // Transcript DOM should NOT be re-rendered or touched while drawer is closed
+    expect(transcriptListEl.innerHTML).toBe('SENTINEL_CLOSED_DRAWER');
+
+    // Finalized caption while drawer is closed
+    await onCaptionCb({
+      speaker: 'Denis',
+      text: 'Final sentence while drawer is closed',
+      timestamp: 3000,
+    });
+
+    // Transcript DOM still NOT touched
+    expect(transcriptListEl.innerHTML).toBe('SENTINEL_CLOSED_DRAWER');
+
+    // Opening drawer renders all buffered segments
+    (overlay as unknown as { openDrawer: () => void }).openDrawer();
+    expect(drawerEl.classList.contains('cr-open')).toBe(true);
+    expect(transcriptListEl.innerHTML).toContain('Final sentence while drawer is closed');
+
+    // Subsequent interim caption with drawer open appends the active turn without discarding segment cache
+    await onActiveCaptionCb({
+      speaker: 'Alice',
+      text: 'Live drafting with drawer open',
+      timestamp: 4000,
+    });
+    expect(transcriptListEl.innerHTML).toContain('Final sentence while drawer is closed');
+    expect(transcriptListEl.innerHTML).toContain('Live drafting with drawer open');
+    expect(transcriptListEl.innerHTML).toContain('cr-active-turn');
+  });
+
+  it('updates word and turn stats accurately with live active drafts and finalized segments', async () => {
+    let onCaptionCb: (cap: InterimCaption) => void = () => {};
+    let onActiveCaptionCb: (cap: InterimCaption | null) => void = () => {};
+    mockAdapter.observe = vi.fn((cb, _, activeCb) => {
+      onCaptionCb = cb;
+      if (activeCb) onActiveCaptionCb = activeCb;
+    });
+
+    const overlay = new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
+    await (overlay as unknown as { restorePromise: Promise<void> }).restorePromise;
+
+    (overlay as unknown as { status: string }).status = 'recording';
+
+    const wordCountEl = elementsById.get('cr-stat-words')!;
+    const turnCountEl = elementsById.get('cr-stat-turns')!;
+
+    expect(wordCountEl.textContent).toBe('0');
+    expect(turnCountEl.textContent).toBe('0');
+
+    // 1. Interim active caption with 3 words
+    await onActiveCaptionCb({
+      speaker: 'Denis',
+      text: 'One two three',
+      timestamp: 1000,
+    });
+    expect(wordCountEl.textContent).toBe('3');
+    expect(turnCountEl.textContent).toBe('1');
+
+    // 2. Active caption evolves to 5 words
+    await onActiveCaptionCb({
+      speaker: 'Denis',
+      text: 'One two three four five',
+      timestamp: 1100,
+    });
+    expect(wordCountEl.textContent).toBe('5');
+    expect(turnCountEl.textContent).toBe('1');
+
+    // 3. Finalize first turn (5 words)
+    await onCaptionCb({
+      speaker: 'Denis',
+      text: 'One two three four five',
+      timestamp: 1200,
+    });
+    await onActiveCaptionCb(null);
+    expect(wordCountEl.textContent).toBe('5');
+    expect(turnCountEl.textContent).toBe('1');
+
+    // 4. Second speaker speaks 4 words in active draft
+    await onActiveCaptionCb({
+      speaker: 'Alice',
+      text: 'Six seven eight nine',
+      timestamp: 2000,
+    });
+    expect(wordCountEl.textContent).toBe('9'); // 5 finalized + 4 active
+    expect(turnCountEl.textContent).toBe('2'); // 1 finalized + 1 active
+
+    // 5. Finalize second turn
+    await onCaptionCb({
+      speaker: 'Alice',
+      text: 'Six seven eight nine',
+      timestamp: 2100,
+    });
+    await onActiveCaptionCb(null);
+    expect(wordCountEl.textContent).toBe('9');
+    expect(turnCountEl.textContent).toBe('2');
+
+    // 6. Reset session resets stats to 0
+    await (overlay as unknown as { resetSession: () => Promise<void> }).resetSession();
+    expect(wordCountEl.textContent).toBe('0');
+    expect(turnCountEl.textContent).toBe('0');
+  });
 });

@@ -21,6 +21,10 @@ export class CaptionOverlay {
   private userManuallyStopped: boolean = false;
   private activeDraft: InterimCaption | null = null;
   private restorePromise: Promise<void> | null = null;
+  private cachedSegmentsHtml: string = '';
+  private cachedSegmentsCount: number = 0;
+  private cachedFinalizedWords: number = 0;
+  private cachedSegmentsWordsCount: number = 0;
 
   // DOM element references
   private widgetEl!: HTMLElement;
@@ -67,6 +71,7 @@ export class CaptionOverlay {
     this.attachEventListeners();
     this.loadSavedLanguage();
     this.checkCaptionsState();
+    this.updateStats();
     this.restorePromise = this.restoreDraftSession();
   }
 
@@ -476,7 +481,7 @@ export class CaptionOverlay {
 
   private openDrawer(): void {
     this.drawerEl.classList.add('cr-open');
-    this.renderTranscriptList();
+    this.renderTranscriptList(true);
   }
 
   private closeDrawer(): void {
@@ -590,11 +595,17 @@ export class CaptionOverlay {
     }
   }
 
-  private renderTranscriptList(): void {
+  private renderTranscriptList(force: boolean = false): void {
+    if (!force && !this.drawerEl.classList.contains('cr-open')) {
+      return;
+    }
+
     const segments = this.session.segments;
     const hasActiveDraft = Boolean(this.activeDraft && this.status === 'recording');
 
     if (segments.length === 0 && !hasActiveDraft) {
+      this.cachedSegmentsHtml = '';
+      this.cachedSegmentsCount = 0;
       this.transcriptListEl.innerHTML = `
         <div style="color:#64748b; font-size:12px; text-align:center; padding:20px;">
           ${t('nudge.noCaptionsYet')}
@@ -605,26 +616,12 @@ export class CaptionOverlay {
 
     const baseTime = this.session.startTime;
 
-    const segmentsHtml = segments
-      .map((seg) => {
-        const timeDiff = Math.max(0, seg.startTime - baseTime);
-        const totalSec = Math.floor(timeDiff / 1000);
-        const mm = Math.floor(totalSec / 60)
-          .toString()
-          .padStart(2, '0');
-        const ss = (totalSec % 60).toString().padStart(2, '0');
-
-        return `
-          <div class="cr-turn">
-            <div class="cr-turn-header">
-              <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(seg.speaker)}</span>
-              <span class="cr-timestamp">${mm}:${ss}</span>
-            </div>
-            <div class="cr-turn-text">${CaptionOverlay.escapeHtml(seg.text)}</div>
-          </div>
-        `;
-      })
-      .join('');
+    if (segments.length !== this.cachedSegmentsCount) {
+      this.cachedSegmentsHtml = segments
+        .map((seg) => this.buildSegmentHtml(seg, baseTime))
+        .join('');
+      this.cachedSegmentsCount = segments.length;
+    }
 
     let activeDraftHtml = '';
     if (hasActiveDraft && this.activeDraft) {
@@ -646,25 +643,77 @@ export class CaptionOverlay {
       `;
     }
 
-    this.transcriptListEl.innerHTML = segmentsHtml + activeDraftHtml;
+    this.transcriptListEl.innerHTML = this.cachedSegmentsHtml + activeDraftHtml;
 
-    // Auto-scroll to bottom of transcript
-    this.transcriptListEl.scrollTop = this.transcriptListEl.scrollHeight;
+    // Auto-scroll to bottom of transcript only if user was already near bottom or forced
+    const el = this.transcriptListEl;
+    if (
+      !force &&
+      typeof el.scrollHeight === 'number' &&
+      typeof el.clientHeight === 'number' &&
+      el.clientHeight > 0
+    ) {
+      const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+      if (isNearBottom) {
+        el.scrollTop = el.scrollHeight;
+      }
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  private buildSegmentHtml(seg: TranscriptSegment, baseTime: number): string {
+    const timeDiff = Math.max(0, seg.startTime - baseTime);
+    const totalSec = Math.floor(timeDiff / 1000);
+    const mm = Math.floor(totalSec / 60)
+      .toString()
+      .padStart(2, '0');
+    const ss = (totalSec % 60).toString().padStart(2, '0');
+
+    return `
+      <div class="cr-turn">
+        <div class="cr-turn-header">
+          <span class="cr-speaker-badge">${CaptionOverlay.escapeHtml(seg.speaker)}</span>
+          <span class="cr-timestamp">${mm}:${ss}</span>
+        </div>
+        <div class="cr-turn-text">${CaptionOverlay.escapeHtml(seg.text)}</div>
+      </div>
+    `;
   }
 
   private updateStats(): void {
     const segments = this.session.segments;
-    let totalWords = segments.reduce((sum, seg) => sum + seg.text.split(/\s+/).length, 0);
+
+    if (segments.length === this.cachedSegmentsWordsCount + 1) {
+      const lastSeg = segments[segments.length - 1];
+      this.cachedFinalizedWords += CaptionOverlay.countWords(lastSeg?.text);
+      this.cachedSegmentsWordsCount = segments.length;
+    } else if (segments.length !== this.cachedSegmentsWordsCount) {
+      this.cachedFinalizedWords = segments.reduce(
+        (sum, seg) => sum + CaptionOverlay.countWords(seg.text),
+        0
+      );
+      this.cachedSegmentsWordsCount = segments.length;
+    }
+
+    let totalWords = this.cachedFinalizedWords;
     let totalTurns = segments.length;
 
     if (this.activeDraft && this.status === 'recording') {
-      const liveWords = this.activeDraft.text.trim().split(/\s+/).filter(Boolean).length;
+      const liveWords = CaptionOverlay.countWords(this.activeDraft.text);
       totalWords += liveWords;
       totalTurns += 1;
     }
 
     this.wordCountStatEl.textContent = totalWords.toString();
     this.turnCountStatEl.textContent = totalTurns.toString();
+  }
+
+  private static countWords(text?: string): number {
+    if (!text) return 0;
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).length;
   }
 
   private updateTimerDisplay(): void {
@@ -764,9 +813,13 @@ export class CaptionOverlay {
       const endTime = draft.endTime || draft.savedAt || Date.now();
       this.elapsedSeconds = Math.max(0, Math.floor((endTime - this.session.startTime) / 1000));
 
+      this.cachedSegmentsHtml = '';
+      this.cachedSegmentsCount = 0;
+      this.cachedFinalizedWords = 0;
+      this.cachedSegmentsWordsCount = 0;
       this.updateTimerDisplay();
       this.updateStats();
-      this.renderTranscriptList();
+      this.renderTranscriptList(true);
 
       if (draft.aiSummary) {
         this.aiOutputEl.textContent = draft.aiSummary;
@@ -868,9 +921,13 @@ export class CaptionOverlay {
     this.userManuallyStopped = false;
     this.activeDraft = null;
 
+    this.cachedSegmentsHtml = '';
+    this.cachedSegmentsCount = 0;
+    this.cachedFinalizedWords = 0;
+    this.cachedSegmentsWordsCount = 0;
     this.updateTimerDisplay();
     this.updateStats();
-    this.renderTranscriptList();
+    this.renderTranscriptList(true);
     this.hideRecoveryBanner();
     this.updateNewMeetingButtons(false);
 
