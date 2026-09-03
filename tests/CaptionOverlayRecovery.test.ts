@@ -447,4 +447,67 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(wordCountEl.textContent).toBe('0');
     expect(turnCountEl.textContent).toBe('0');
   });
+
+  it('completely removes nudge banner, pause, stop, and start buttons from widget DOM', () => {
+    let capturedContainerHtml = '';
+    mockShadowRoot.appendChild = vi.fn((child: unknown) => {
+      capturedContainerHtml = (child as MockElement).innerHTML;
+    });
+
+    new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
+
+    expect(capturedContainerHtml).not.toContain('cr-nudge');
+    expect(capturedContainerHtml).not.toContain('cr-btn-pause');
+    expect(capturedContainerHtml).not.toContain('cr-btn-stop');
+    expect(capturedContainerHtml).not.toContain('cr-btn-start');
+    expect(capturedContainerHtml).toContain('cr-btn-drawer');
+  });
+
+  it('pauses and resumes time counter when closed captions are toggled in the host app', async () => {
+    vi.useFakeTimers();
+
+    let onCaptionsStateChangeCb: (enabled: boolean) => void = () => {};
+    mockAdapter.observe = vi.fn((_, stateCb) => {
+      if (stateCb) onCaptionsStateChangeCb = stateCb;
+    });
+
+    // Start with CC enabled
+    mockAdapter.isCaptionsEnabled = () => true;
+
+    const overlay = new CaptionOverlay(mockShadowRoot as unknown as ShadowRoot, mockAdapter);
+    await (overlay as unknown as { restorePromise: Promise<void> }).restorePromise;
+
+    const dotEl = elementsById.get('cr-dot')!;
+    const timerEl = elementsById.get('cr-timer')!;
+
+    // Initial state with CC enabled
+    expect((overlay as unknown as { status: string }).status).toBe('recording');
+    expect(dotEl.className).toBe('cr-dot cr-dot-rec');
+
+    // Let 3 seconds pass while CC is enabled
+    vi.advanceTimersByTime(3000);
+    expect(timerEl.textContent).toBe('00:00:03');
+
+    // 1. Host disables CC in Meet/Zoom
+    onCaptionsStateChangeCb(false);
+
+    expect((overlay as unknown as { status: string }).status).toBe('paused');
+    expect(dotEl.className).toBe('cr-dot cr-dot-paused');
+
+    // Time advances 5 seconds while CC is disabled -> timer remains paused
+    vi.advanceTimersByTime(5000);
+    expect(timerEl.textContent).toBe('00:00:03');
+
+    // 2. Host re-enables CC in Meet/Zoom
+    onCaptionsStateChangeCb(true);
+
+    expect((overlay as unknown as { status: string }).status).toBe('recording');
+    expect(dotEl.className).toBe('cr-dot cr-dot-rec');
+
+    // Time advances 2 more seconds -> timer resumes from 00:00:03 to 00:00:05
+    vi.advanceTimersByTime(2000);
+    expect(timerEl.textContent).toBe('00:00:05');
+
+    vi.useRealTimers();
+  });
 });

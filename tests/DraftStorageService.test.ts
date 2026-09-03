@@ -131,4 +131,26 @@ describe('DraftStorageService', () => {
     expect(await DraftStorageService.getUnsavedDraft()).toBeNull();
     expect(mockStorage['caption_recorder_unsaved_draft']).toBeUndefined();
   });
+
+  it('handles extension context invalidation gracefully without throwing or logging error', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // 1. Simulating chrome.runtime.id becoming undefined (orphaned content script)
+    (globalThis as unknown as { chrome: { runtime?: { id?: string } } }).chrome.runtime = {};
+    expect(DraftStorageService.isContextValid()).toBe(false);
+
+    const session = createTestSession();
+    await expect(DraftStorageService.saveDraftImmediate(session)).resolves.not.toThrow();
+    await expect(DraftStorageService.getUnsavedDraft()).resolves.toBeNull();
+    await expect(DraftStorageService.clearDraft()).resolves.not.toThrow();
+
+    // 2. Simulating chrome API throwing "Extension context invalidated"
+    (globalThis as unknown as { chrome: { runtime?: { id?: string }; storage: { local: { set: unknown } } } }).chrome.runtime = { id: 'test_id' };
+    (globalThis as unknown as { chrome: { storage: { local: { set: unknown } } } }).chrome.storage.local.set = vi.fn().mockRejectedValue(new Error('Extension context invalidated.'));
+
+    await expect(DraftStorageService.saveDraftImmediate(session)).resolves.not.toThrow();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
 });

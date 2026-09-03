@@ -17,7 +17,6 @@ export class CaptionOverlay {
   private session: MeetingSession;
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private elapsedSeconds: number = 0;
-  private userManuallyStopped: boolean = false;
   private activeDraft: InterimCaption | null = null;
   private restorePromise: Promise<void> | null = null;
   private cachedSegmentsHtml: string = '';
@@ -30,11 +29,7 @@ export class CaptionOverlay {
   private dotEl!: HTMLElement;
   private timerEl!: HTMLElement;
   private tickerEl!: HTMLElement;
-  private btnStart!: HTMLButtonElement;
-  private btnPause!: HTMLButtonElement;
-  private btnStop!: HTMLButtonElement;
   private btnToggleDrawer!: HTMLButtonElement;
-  private nudgeEl!: HTMLElement;
 
   private drawerEl!: HTMLElement;
   private transcriptListEl!: HTMLElement;
@@ -80,24 +75,9 @@ export class CaptionOverlay {
           <span class="cr-timer" id="cr-timer">00:00:00</span>
           <span class="cr-ticker" id="cr-ticker">${t('nudge.noCaptionsYet')}</span>
         </div>
-        <button class="cr-btn-icon cr-btn-rec" id="cr-btn-start" title="${t('controls.start')}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9"/></svg>
-        </button>
-        <button class="cr-btn-icon" id="cr-btn-pause" title="${t('controls.pause')}" style="display:none;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
-        </button>
-        <button class="cr-btn-icon" id="cr-btn-stop" title="${t('controls.stop')}" style="display:none;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
-        </button>
         <button class="cr-btn-icon" id="cr-btn-drawer" title="${t('controls.openDrawer')}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-      </div>
-
-      <!-- CC Nudge Banner -->
-      <div class="cr-nudge" id="cr-nudge">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>${t('nudge.ccOff')}</span>
       </div>
 
       <!-- Expandable Drawer / Modal -->
@@ -192,11 +172,7 @@ export class CaptionOverlay {
     this.dotEl = this.shadowRoot.getElementById('cr-dot')!;
     this.timerEl = this.shadowRoot.getElementById('cr-timer')!;
     this.tickerEl = this.shadowRoot.getElementById('cr-ticker')!;
-    this.btnStart = this.shadowRoot.getElementById('cr-btn-start') as HTMLButtonElement;
-    this.btnPause = this.shadowRoot.getElementById('cr-btn-pause') as HTMLButtonElement;
-    this.btnStop = this.shadowRoot.getElementById('cr-btn-stop') as HTMLButtonElement;
     this.btnToggleDrawer = this.shadowRoot.getElementById('cr-btn-drawer') as HTMLButtonElement;
-    this.nudgeEl = this.shadowRoot.getElementById('cr-nudge')!;
 
     this.drawerEl = this.shadowRoot.getElementById('cr-drawer')!;
     this.transcriptListEl = this.shadowRoot.getElementById('cr-transcript-list')!;
@@ -205,10 +181,6 @@ export class CaptionOverlay {
   }
 
   private attachEventListeners(): void {
-    // Recording controls
-    this.btnStart.addEventListener('click', () => this.startRecording());
-    this.btnPause.addEventListener('click', () => this.togglePause());
-    this.btnStop.addEventListener('click', () => this.stopRecording());
     this.btnToggleDrawer.addEventListener('click', () => this.toggleDrawer());
 
     const closeBtn = this.shadowRoot.getElementById('cr-drawer-close');
@@ -259,12 +231,16 @@ export class CaptionOverlay {
 
     // Page Unload / Navigation: Guarantee unflushed speech and active draft are persisted
     const handleUnload = () => {
-      this.adapter.flush?.();
-      if (this.status === 'recording') {
-        this.session.endTime = Date.now();
-      }
-      if (this.session.segments.length > 0) {
-        DraftStorageService.saveDraftImmediate(this.session);
+      try {
+        this.adapter.flush?.();
+        if (this.status === 'recording' || this.status === 'paused') {
+          this.session.endTime = Date.now();
+        }
+        if (this.session.segments.length > 0 && DraftStorageService.isContextValid()) {
+          DraftStorageService.saveDraftImmediate(this.session);
+        }
+      } catch {
+        // Silently ignore unload errors if extension context was invalidated
       }
     };
     window.addEventListener('beforeunload', handleUnload);
@@ -272,21 +248,26 @@ export class CaptionOverlay {
 
     // Sync with extension popup if draft is cleared externally
     if (typeof chrome !== 'undefined' && chrome?.storage?.onChanged) {
-      chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'local' && changes['caption_recorder_unsaved_draft']) {
-          if (!changes['caption_recorder_unsaved_draft'].newValue) {
-            if (this.status === 'idle' && this.session.segments.length > 0) {
-              this.resetSession(false);
+      try {
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+          if (!DraftStorageService.isContextValid()) return;
+          if (areaName === 'local' && changes['caption_recorder_unsaved_draft']) {
+            if (!changes['caption_recorder_unsaved_draft'].newValue) {
+              if (this.status === 'idle' && this.session.segments.length > 0) {
+                this.resetSession(false);
+              }
             }
           }
-        }
-      });
+        });
+      } catch {
+        // Ignore if extension context is already invalid
+      }
     }
 
     // Draggable Widget
     this.initDraggable();
 
-    // Monitor captions enabled state
+    // Monitor captions enabled state and stream speech
     this.adapter.observe(
       async (caption) => {
         if (this.restorePromise) {
@@ -296,29 +277,26 @@ export class CaptionOverlay {
         // Finalized caption
         this.tickerEl.textContent = `${caption.speaker}: ${caption.text.slice(-25)}`;
 
-        // Auto-start recording when speech arrives if idle and user hasn't manually stopped
-        if (this.status === 'idle' && !this.userManuallyStopped) {
-          console.info('[CaptionRecorder] Live captions detected, auto-starting recording session');
-          this.startRecording();
+        if (this.status !== 'recording' && this.adapter.isCaptionsEnabled()) {
+          console.info('[CaptionRecorder] Live captions detected, resuming recording session');
+          this.resumeRecording();
         }
 
-        if (this.status === 'recording') {
-          const segment: TranscriptSegment = {
-            id: `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
-            speaker: caption.speaker,
-            startTime: caption.timestamp,
-            endTime: caption.timestamp,
-            text: caption.text,
-          };
-          this.session.segments.push(segment);
-          this.updateStats();
-          this.renderTranscriptList();
-          this.updateNewMeetingButtons(true);
-          DraftStorageService.saveDraftDebounced(this.session);
-        }
+        const segment: TranscriptSegment = {
+          id: `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+          speaker: caption.speaker,
+          startTime: caption.timestamp,
+          endTime: caption.timestamp,
+          text: caption.text,
+        };
+        this.session.segments.push(segment);
+        this.updateStats();
+        this.renderTranscriptList();
+        this.updateNewMeetingButtons(true);
+        DraftStorageService.saveDraftDebounced(this.session);
       },
       (enabled) => {
-        this.updateCaptionsNudge(enabled);
+        this.handleCaptionsStateChange(enabled);
       },
       async (activeCaption) => {
         if (this.restorePromise) {
@@ -329,9 +307,9 @@ export class CaptionOverlay {
         if (activeCaption) {
           this.tickerEl.textContent = `${activeCaption.speaker}: ${activeCaption.text.slice(-25)}`;
 
-          if (this.status === 'idle' && !this.userManuallyStopped) {
-            console.info('[CaptionRecorder] Live draft detected, auto-starting recording session');
-            this.startRecording();
+          if (this.status !== 'recording' && this.adapter.isCaptionsEnabled()) {
+            console.info('[CaptionRecorder] Live draft detected, resuming recording session');
+            this.resumeRecording();
           }
         } else if (this.session.segments.length === 0) {
           this.tickerEl.textContent = t('nudge.noCaptionsYet');
@@ -345,18 +323,22 @@ export class CaptionOverlay {
     );
   }
 
-  private async startRecording(): Promise<void> {
-    if (this.restorePromise) {
-      await this.restorePromise;
+  private handleCaptionsStateChange(enabled: boolean): void {
+    if (enabled) {
+      this.resumeRecording();
+    } else {
+      this.pauseRecording();
+    }
+  }
+
+  private resumeRecording(): void {
+    if (this.status === 'recording') {
+      return;
     }
 
-    this.userManuallyStopped = false;
     this.status = 'recording';
     this.session.endTime = undefined;
     this.dotEl.className = 'cr-dot cr-dot-rec';
-    this.btnStart.style.display = 'none';
-    this.btnPause.style.display = 'flex';
-    this.btnStop.style.display = 'flex';
     this.hideRecoveryBanner();
     this.updateNewMeetingButtons(true);
 
@@ -366,52 +348,32 @@ export class CaptionOverlay {
         this.updateTimerDisplay();
       }, 1000);
     }
-
-    this.checkCaptionsState();
   }
 
-  private togglePause(): void {
-    if (this.status === 'recording') {
-      this.status = 'paused';
-      this.dotEl.className = 'cr-dot cr-dot-paused';
-      this.btnPause.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-      this.btnPause.title = t('controls.resume');
-      this.adapter.flush?.();
-      this.activeDraft = null;
-      this.renderTranscriptList();
-    } else if (this.status === 'paused') {
-      this.status = 'recording';
-      this.dotEl.className = 'cr-dot cr-dot-rec';
-      this.btnPause.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`;
-      this.btnPause.title = t('controls.pause');
+  private pauseRecording(): void {
+    if (this.status === 'paused') {
+      return;
     }
-  }
 
-  private stopRecording(): void {
-    this.userManuallyStopped = true;
-    this.status = 'idle';
-    this.dotEl.className = 'cr-dot';
-    this.btnStart.style.display = 'flex';
-    this.btnPause.style.display = 'none';
-    this.btnStop.style.display = 'none';
+    const wasRecording = this.status === 'recording';
+    this.status = this.elapsedSeconds > 0 || this.session.segments.length > 0 ? 'paused' : 'idle';
+    this.dotEl.className = this.status === 'paused' ? 'cr-dot cr-dot-paused' : 'cr-dot';
 
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
 
-    this.adapter.flush?.();
-    this.activeDraft = null;
-    this.session.endTime = Date.now();
-    this.updateStats();
-    this.updateNewMeetingButtons(true);
+    if (wasRecording) {
+      this.adapter.flush?.();
+      this.activeDraft = null;
+      this.renderTranscriptList();
+      this.updateStats();
 
-    // Mirror to local draft immediately so user doesn't lose it
-    DraftStorageService.saveDraftImmediate(this.session);
-
-    // Open drawer to review & export
-    this.openDrawer();
-    this.switchTab('export');
+      if (this.session.segments.length > 0) {
+        DraftStorageService.saveDraftImmediate(this.session);
+      }
+    }
   }
 
   private toggleDrawer(): void {
@@ -580,15 +542,7 @@ export class CaptionOverlay {
 
   private checkCaptionsState(): void {
     const isEnabled = this.adapter.isCaptionsEnabled();
-    this.updateCaptionsNudge(isEnabled);
-  }
-
-  private updateCaptionsNudge(isEnabled: boolean): void {
-    if (!isEnabled && this.status === 'recording') {
-      this.nudgeEl.classList.add('cr-visible');
-    } else {
-      this.nudgeEl.classList.remove('cr-visible');
-    }
+    this.handleCaptionsStateChange(isEnabled);
   }
 
   private initDraggable(): void {
@@ -680,13 +634,18 @@ export class CaptionOverlay {
 
       if (draft.endTime) {
         this.status = 'idle';
-        this.userManuallyStopped = true;
+        this.dotEl.className = 'cr-dot';
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
         this.showRecoveryBanner(draft);
         // Automatically open the drawer to export tab after page reload if meeting has ended
         this.openDrawer();
         this.switchTab('export');
       } else {
         this.showRecoveryBanner(draft);
+        this.checkCaptionsState();
       }
     } catch (err) {
       console.warn('[CaptionRecorder] Failed to restore draft session', err);
@@ -733,19 +692,11 @@ export class CaptionOverlay {
   }
 
   private async resetSession(clearStorage: boolean = true): Promise<void> {
-    if (this.status === 'recording') {
-      this.userManuallyStopped = true;
-      this.status = 'idle';
-      this.dotEl.className = 'cr-dot';
-      this.btnStart.style.display = 'flex';
-      this.btnPause.style.display = 'none';
-      this.btnStop.style.display = 'none';
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-      this.adapter.flush?.();
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
     }
+    this.adapter.flush?.();
 
     if (clearStorage) {
       await DraftStorageService.clearDraft();
@@ -761,9 +712,7 @@ export class CaptionOverlay {
       url: typeof window !== 'undefined' ? window.location.href : undefined,
     };
 
-    this.status = 'idle';
     this.elapsedSeconds = 0;
-    this.userManuallyStopped = false;
     this.activeDraft = null;
 
     this.cachedSegmentsHtml = '';
@@ -777,10 +726,14 @@ export class CaptionOverlay {
     this.updateNewMeetingButtons(false);
 
     this.tickerEl.textContent = t('nudge.noCaptionsYet');
-    this.dotEl.className = 'cr-dot';
-    this.btnStart.style.display = 'flex';
-    this.btnPause.style.display = 'none';
-    this.btnStop.style.display = 'none';
+
+    const isEnabled = this.adapter.isCaptionsEnabled();
+    if (isEnabled) {
+      this.resumeRecording();
+    } else {
+      this.status = 'idle';
+      this.dotEl.className = 'cr-dot';
+    }
   }
 
   private static escapeHtml(str: string): string {

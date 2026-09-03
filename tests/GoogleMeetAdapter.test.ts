@@ -315,4 +315,127 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted.length).toBe(2);
     expect(emitted[1].text).toBe('Paragraph 2 in progress');
   });
+
+  it('correctly detects CC enabled via caption text presence or button aria-pressed', () => {
+    // Neither present
+    expect(adapter.isCaptionsEnabled()).toBe(false);
+
+    // Visible caption text element present
+    (
+      globalThis as unknown as { document: { querySelector: unknown; querySelectorAll: unknown } }
+    ).document.querySelectorAll = vi.fn((sel: string) => {
+      if (sel.includes('ygicle')) {
+        return [
+          {
+            textContent: 'Live caption text in call',
+            offsetWidth: 120,
+            offsetHeight: 24,
+            closest: () => null,
+          },
+        ];
+      }
+      return [];
+    });
+    expect(adapter.isCaptionsEnabled()).toBe(true);
+
+    // Button aria-pressed="true"
+    (
+      globalThis as unknown as { document: { querySelector: unknown; querySelectorAll: unknown } }
+    ).document.querySelector = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd') || sel.includes('aria-keyshortcuts')) {
+        return {
+          getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'true' : null),
+          textContent: '',
+        };
+      }
+      return null;
+    });
+    (
+      globalThis as unknown as { document: { querySelectorAll: unknown } }
+    ).document.querySelectorAll = vi.fn(() => []);
+    expect(adapter.isCaptionsEnabled()).toBe(true);
+
+    // Button aria-pressed="false"
+    (
+      globalThis as unknown as { document: { querySelector: unknown } }
+    ).document.querySelector = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd')) {
+        return {
+          getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'false' : null),
+          textContent: '',
+        };
+      }
+      return null;
+    });
+    expect(adapter.isCaptionsEnabled()).toBe(false);
+
+    // Button with icon text closed_caption (active)
+    (
+      globalThis as unknown as { document: { querySelector: unknown } }
+    ).document.querySelector = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd')) {
+        return {
+          getAttribute: () => null,
+          textContent: 'closed_caption',
+        };
+      }
+      return null;
+    });
+    expect(adapter.isCaptionsEnabled()).toBe(true);
+
+    // Button with icon text closed_caption_off (inactive)
+    (
+      globalThis as unknown as { document: { querySelector: unknown } }
+    ).document.querySelector = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd')) {
+        return {
+          getAttribute: () => null,
+          textContent: 'closed_caption_off',
+        };
+      }
+      return null;
+    });
+    expect(adapter.isCaptionsEnabled()).toBe(false);
+  });
+
+  it('notifies onCaptionsStateChange and flushes pending speech when CC is disabled', () => {
+    let isCCEnabled = true;
+    (
+      globalThis as unknown as { document: { querySelector: unknown } }
+    ).document.querySelector = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd')) {
+        return {
+          getAttribute: (attr: string) => (attr === 'aria-pressed' ? String(isCCEnabled) : null),
+        };
+      }
+      return null;
+    });
+
+    const emitted: InterimCaption[] = [];
+    const stateChanges: boolean[] = [];
+
+    adapter.observe(
+      (cap) => emitted.push(cap),
+      (enabled) => stateChanges.push(enabled)
+    );
+
+    // Initial check fired enabled: true
+    expect(stateChanges).toEqual([true]);
+
+    // Add a pending caption
+    const { textEl } = createMockCaptionElement('Speech before user turns off CC', 'Denis');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    expect(emitted.length).toBe(0);
+
+    // CC is turned off in Meet
+    isCCEnabled = false;
+    (adapter as unknown as { checkCaptionsState: () => void }).checkCaptionsState();
+
+    expect(stateChanges).toEqual([true, false]);
+    // Speech before turn off was flushed!
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].text).toBe('Speech before user turns off CC');
+  });
 });

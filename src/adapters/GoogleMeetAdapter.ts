@@ -84,18 +84,101 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     );
   }
 
-  public isCaptionsEnabled(): boolean {
-    if (
-      document.querySelector(`[jsname="dsyhDe"], ${GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING}`)
-    ) {
-      return true;
+  public findCaptionButton(): HTMLElement | null {
+    if (typeof document === 'undefined' || !document.querySelector) return null;
+
+    // 1. Direct Google Meet CC button selectors (universal across locales)
+    const directBtn = document.querySelector<HTMLElement>(
+      'button[aria-keyshortcuts="c"], ' +
+      'button[aria-keyshortcuts*="c"], ' +
+      'button[jsname="r8qRAd"], ' +
+      'button[data-tooltip-id*="caption" i], ' +
+      'button[data-tooltip*="caption" i], ' +
+      'button[aria-label*="caption" i]'
+    );
+    if (directBtn) return directBtn;
+
+    // 2. Scan buttons for Material Icons (Google uses closed_caption / subtitles ligature font names)
+    const buttons = document.querySelectorAll<HTMLElement>(
+      'button, [role="button"], [role="menuitem"]'
+    );
+    for (let i = 0; i < buttons.length; i++) {
+      const btn = buttons[i];
+      const text = btn.textContent || '';
+      if (text.includes('closed_caption') || text.includes('subtitles')) {
+        return btn;
+      }
     }
 
-    const ccBtn = document.querySelector<HTMLButtonElement>(
-      'button[jsname="r8qRAd"], button[aria-keyshortcuts*="c"]'
-    );
-    return ccBtn?.getAttribute('aria-pressed') === 'true';
+    return null;
   }
+
+  public isCaptionsEnabled(): boolean {
+    const ccBtn = this.findCaptionButton();
+    if (ccBtn) {
+      // 1. Check aria-pressed (most authoritative WAI-ARIA state: "true" | "false")
+      const ariaPressed =
+        typeof ccBtn.getAttribute === 'function' ? ccBtn.getAttribute('aria-pressed') : null;
+      if (ariaPressed === 'true') return true;
+      if (ariaPressed === 'false') return false;
+
+      // 2. Check icon text inside the button
+      const text = ccBtn.textContent || '';
+      if (text.includes('closed_caption_off') || text.includes('subtitles_off')) {
+        return false;
+      }
+      if (text.includes('closed_caption') || text.includes('subtitles')) {
+        return true;
+      }
+    }
+
+    // 3. Fallback: If no button found, inspect caption text elements in DOM.
+    // Must be VISIBLE and non-empty. Never just check [jsname="dsyhDe"] existence
+    // because Google Meet keeps empty containers in the DOM when captions are turned off.
+    return this.hasVisibleCaptionText();
+  }
+
+  private hasVisibleCaptionText(): boolean {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return false;
+
+    const textEls = document.querySelectorAll<HTMLElement>(
+      GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
+    );
+    for (let i = 0; i < textEls.length; i++) {
+      const el = textEls[i];
+      if (this.isExcluded(el)) continue;
+      const text = el.textContent?.trim() || '';
+      if (this.isValidCaptionText(text)) {
+        if (typeof el.offsetWidth === 'number' && typeof el.offsetHeight === 'number') {
+          if (el.offsetWidth > 0 || el.offsetHeight > 0) {
+            return true;
+          }
+        }
+        if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+          const style = window.getComputedStyle(el);
+          if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private handleUserInteraction = (): void => {
+    this.checkCaptionsState();
+    if (typeof setTimeout === 'function') {
+      setTimeout(() => this.checkCaptionsState(), 100);
+    }
+  };
+
+  private handleKeyup = (e: KeyboardEvent): void => {
+    if (e.key === 'c' || e.key === 'C') {
+      this.handleUserInteraction();
+    }
+  };
 
   public observe(
     onCaption: (caption: InterimCaption) => void,
@@ -108,21 +191,32 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     this.onCaptionsStateChangeCallback = onCaptionsStateChange || null;
     this.onActiveCaptionCallback = onActiveCaption || null;
 
-    // 1. Observe DOM mutations for real-time responsiveness
+    // 1. Observe DOM mutations including attribute changes for real-time responsiveness
     this.mutationObserver = new MutationObserver((mutations) => {
       this.handleMutations(mutations);
     });
 
-    this.mutationObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
+    if (typeof document !== 'undefined' && document.body) {
+      this.mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['aria-pressed', 'aria-label', 'class', 'style'],
+      });
+
+      if (typeof document.addEventListener === 'function') {
+        document.addEventListener('click', this.handleUserInteraction, { passive: true });
+        document.addEventListener('keyup', this.handleKeyup, { passive: true });
+      }
+    }
 
     // 2. 300ms scanner loop as resilient fallback
     this.pollInterval = setInterval(() => {
-      this.scanActiveCaptions();
       this.checkCaptionsState();
+      if (this.isCaptionsEnabled()) {
+        this.scanActiveCaptions();
+      }
     }, 300);
 
     this.checkCaptionsState();
@@ -143,6 +237,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('click', this.handleUserInteraction);
+      document.removeEventListener('keyup', this.handleKeyup);
     }
     this.flush();
     this.onActiveCaptionCallback?.(null);
@@ -178,11 +276,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       text: cleanText,
       timestamp: Date.now(),
     });
-
-    if (!this.lastKnownCaptionsEnabled) {
-      this.lastKnownCaptionsEnabled = true;
-      this.onCaptionsStateChangeCallback?.(true);
-    }
   }
 
   private isElementConnected(el?: HTMLElement): boolean {
@@ -202,6 +295,11 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   private handleMutations(mutations: MutationRecord[]): void {
     if (!this.onCaptionCallback) return;
+
+    this.checkCaptionsState();
+    if (!this.isCaptionsEnabled()) {
+      return;
+    }
 
     if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
       this.flush();
@@ -223,6 +321,13 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   private scanActiveCaptions(): void {
     if (!this.onCaptionCallback) return;
+
+    if (!this.isCaptionsEnabled()) {
+      if (this.pendingCaption) {
+        this.flush();
+      }
+      return;
+    }
 
     if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
       this.flush();
@@ -333,6 +438,9 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     const isEnabled = this.isCaptionsEnabled();
     if (isEnabled !== this.lastKnownCaptionsEnabled) {
       this.lastKnownCaptionsEnabled = isEnabled;
+      if (!isEnabled) {
+        this.flush();
+      }
       this.onCaptionsStateChangeCallback?.(isEnabled);
     }
   }

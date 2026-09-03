@@ -6,12 +6,31 @@ export class DraftStorageService {
   private static saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   /**
+   * Check if Chrome extension context is still valid.
+   * When an extension is reloaded or updated, existing content scripts become orphaned
+   * and calling chrome APIs throws "Extension context invalidated".
+   */
+  public static isContextValid(): boolean {
+    try {
+      if (typeof chrome === 'undefined') return false;
+      if (chrome.runtime && !chrome.runtime.id) return false;
+      return Boolean(chrome.storage?.local);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Save or update the active meeting draft with a debounce to minimize disk I/O.
    */
   public static async saveDraftDebounced(
     session: MeetingSession,
     delayMs: number = 800
   ): Promise<void> {
+    if (!this.isContextValid()) {
+      return;
+    }
+
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
     }
@@ -33,16 +52,22 @@ export class DraftStorageService {
       this.saveTimeout = null;
     }
 
+    if (!this.isContextValid()) {
+      return;
+    }
+
     try {
-      if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
-        await chrome.storage.local.set({
-          [DRAFT_KEY]: {
-            ...session,
-            savedAt: Date.now(),
-          },
-        });
+      await chrome.storage.local.set({
+        [DRAFT_KEY]: {
+          ...session,
+          savedAt: Date.now(),
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Extension context invalidated')) {
+        return;
       }
-    } catch (err) {
       console.error('Failed to save draft to storage', err);
     }
   }
@@ -51,15 +76,21 @@ export class DraftStorageService {
    * Retrieve unsaved draft if one exists.
    */
   public static async getUnsavedDraft(): Promise<MeetingSession | null> {
+    if (!this.isContextValid()) {
+      return null;
+    }
+
     try {
-      if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
-        const result = await chrome.storage.local.get(DRAFT_KEY);
-        const draft = result[DRAFT_KEY];
-        if (draft && Array.isArray(draft.segments) && draft.segments.length > 0) {
-          return draft as MeetingSession;
-        }
+      const result = await chrome.storage.local.get(DRAFT_KEY);
+      const draft = result[DRAFT_KEY];
+      if (draft && Array.isArray(draft.segments) && draft.segments.length > 0) {
+        return draft as MeetingSession;
       }
-    } catch (err) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Extension context invalidated')) {
+        return null;
+      }
       console.error('Failed to read draft from storage', err);
     }
     return null;
@@ -74,11 +105,17 @@ export class DraftStorageService {
       this.saveTimeout = null;
     }
 
+    if (!this.isContextValid()) {
+      return;
+    }
+
     try {
-      if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
-        await chrome.storage.local.remove(DRAFT_KEY);
+      await chrome.storage.local.remove(DRAFT_KEY);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Extension context invalidated')) {
+        return;
       }
-    } catch (err) {
       console.error('Failed to clear draft from storage', err);
     }
   }
