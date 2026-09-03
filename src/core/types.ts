@@ -19,7 +19,6 @@ export interface MeetingSession {
   startTime: number;
   endTime?: number;
   segments: TranscriptSegment[];
-  aiSummary?: string;
   platform: 'google-meet' | 'zoom' | 'teams' | 'unknown';
   savedAt?: number;
   url?: string;
@@ -28,9 +27,3 @@ export interface MeetingSession {
 export type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt';
 
 export type RecordingStatus = 'idle' | 'recording' | 'paused';
-
-export interface AIModelStatus {
-  available: boolean;
-  status: 'readily' | 'after-download' | 'no' | 'unsupported-browser';
-  message?: string;
-}

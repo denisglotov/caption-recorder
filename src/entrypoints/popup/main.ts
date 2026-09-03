@@ -6,7 +6,6 @@ import { t } from '../../i18n';
 async function initPopup() {
   localizeUI();
   await checkUnsavedDraft();
-  checkAIStatus();
 }
 
 function localizeUI() {
@@ -98,20 +97,6 @@ async function handleExportDraft(session: MeetingSession) {
     setTimeout(() => {
       idleTitle.textContent = 'Ready for Meetings';
     }, 3000);
-  }
-}
-
-function checkAIStatus() {
-  const pill = document.getElementById('ai-status-pill');
-  if (!pill) return;
-
-  const hasAI = typeof window !== 'undefined' && Boolean(window.ai || window.LanguageModel);
-  if (hasAI) {
-    pill.className = 'pill pill-ready';
-    pill.textContent = 'Supported';
-  } else {
-    pill.className = 'pill pill-unsupported';
-    pill.textContent = 'Chrome only';
   }
 }
 

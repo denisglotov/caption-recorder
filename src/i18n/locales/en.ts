@@ -24,22 +24,7 @@ export const en: TranslationDict = {
   },
   tabs: {
     live: 'Live Transcript',
-    summary: 'AI Summary',
     export: 'Export',
-  },
-  summary: {
-    title: 'Meeting Summary & Action Items',
-    generate: 'Generate with Gemini Nano',
-    generating: 'Analyzing meeting transcript on-device...',
-    ready: 'Summary Generated',
-    copy: 'Copy Summary',
-    copied: 'Copied!',
-    notAvailable: 'On-device Gemini Nano is not currently available.',
-    instructions: 'Enable chrome://flags/#optimization-guide-on-device-model and restart Chrome.',
-    nonChrome:
-      'On-device Gemini Nano is exclusive to Google Chrome. All caption recording and exports work normally.',
-    empty: 'No transcript available yet to summarize.',
-    languageAuto: 'Auto (Match meeting)',
   },
   export: {
     title: 'Export Meeting',

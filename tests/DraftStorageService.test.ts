@@ -45,7 +45,6 @@ describe('DraftStorageService', () => {
           text: 'Welcome everyone',
         },
       ],
-      aiSummary: 'Summary of sprint planning',
       url: 'https://meet.google.com/abc-defg-hij',
     };
   }
@@ -61,7 +60,6 @@ describe('DraftStorageService', () => {
     expect(saved.id).toBe('test_session_123');
     expect(saved.segments.length).toBe(1);
     expect(saved.segments[0].text).toBe('Welcome everyone');
-    expect(saved.aiSummary).toBe('Summary of sprint planning');
     expect(saved.url).toBe('https://meet.google.com/abc-defg-hij');
     expect(typeof saved.savedAt).toBe('number');
   });

@@ -24,23 +24,7 @@ export const ja: TranslationDict = {
   },
   tabs: {
     live: 'リアルタイム文字起こし',
-    summary: 'AI要約',
     export: 'エクスポート',
-  },
-  summary: {
-    title: '会議の要約とアクションアイテム',
-    generate: 'Gemini Nanoで要約を作成',
-    generating: '端末上で文字起こしを解析中...',
-    ready: '要約が作成されました',
-    copy: '要約をコピー',
-    copied: 'コピーしました！',
-    notAvailable: 'オンデバイスGemini Nanoは現在利用できません。',
-    instructions:
-      'chrome://flags/#optimization-guide-on-device-model を有効にしてChromeを再起動してください。',
-    nonChrome:
-      'オンデバイスGemini NanoはGoogle Chrome限定です。字幕の録音とエクスポートは通常通り動作します。',
-    empty: '要約可能な文字起こしがまだありません。',
-    languageAuto: '自動（会議の言語）',
   },
   export: {
     title: '会議をエクスポート',

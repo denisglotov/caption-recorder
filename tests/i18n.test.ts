@@ -10,7 +10,7 @@ describe('i18n subsystem', () => {
     setLocale('en');
     expect(t('controls.start')).toBe('Start Recording');
     expect(t('status.recording')).toBe('Recording');
-    expect(t('tabs.summary')).toBe('AI Summary');
+    expect(t('tabs.live')).toBe('Live Transcript');
   });
 
   it('translates German keys correctly', () => {
@@ -55,7 +55,7 @@ describe('i18n subsystem', () => {
       const dict = getDictionary(loc);
       expect(dict.controls.start).toBeTruthy();
       expect(dict.status.recording).toBeTruthy();
-      expect(dict.summary.generate).toBeTruthy();
+      expect(dict.tabs.live).toBeTruthy();
       expect(dict.export.downloadTxt).toBeTruthy();
       expect(dict.recovery.title).toBeTruthy();
     }

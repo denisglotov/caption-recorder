@@ -24,23 +24,7 @@ export const ko: TranslationDict = {
   },
   tabs: {
     live: '실시간 전사',
-    summary: 'AI 요약',
     export: '내보내기',
-  },
-  summary: {
-    title: '회의 요약 및 실행 항목',
-    generate: 'Gemini Nano로 요약 생성',
-    generating: '기기에서 전사 내용을 분석 중...',
-    ready: '요약 생성 완료',
-    copy: '요약 복사',
-    copied: '복사되었습니다!',
-    notAvailable: '온디바이스 Gemini Nano를 현재 사용할 수 없습니다.',
-    instructions:
-      'chrome://flags/#optimization-guide-on-device-model 설정을 활성화하고 Chrome을 다시 시작하세요.',
-    nonChrome:
-      '온디바이스 Gemini Nano는 Google Chrome 전용입니다. 자막 기록과 파일 내보내기는 정상 동작합니다.',
-    empty: '요약할 전사 내용이 아직 없습니다.',
-    languageAuto: '자동 (회의 언어)',
   },
   export: {
     title: '회의 내보내기',

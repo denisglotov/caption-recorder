@@ -24,21 +24,7 @@ export const zh: TranslationDict = {
   },
   tabs: {
     live: '实时转录',
-    summary: 'AI 摘要',
     export: '导出',
-  },
-  summary: {
-    title: '会议总结与行动项',
-    generate: '使用 Gemini Nano 生成摘要',
-    generating: '正在本地分析会议记录...',
-    ready: '摘要生成完毕',
-    copy: '复制摘要',
-    copied: '已复制！',
-    notAvailable: '设备端 Gemini Nano 当前不可用。',
-    instructions: '请启用 chrome://flags/#optimization-guide-on-device-model 并重启 Chrome。',
-    nonChrome: '设备端 Gemini Nano 为 Google Chrome 独占。字幕录制和文件导出功能完全正常。',
-    empty: '暂无可用文字记录来生成摘要。',
-    languageAuto: '自动（匹配会议语言）',
   },
   export: {
     title: '导出会议记录',

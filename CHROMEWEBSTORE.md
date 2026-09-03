@@ -1,28 +1,27 @@
 # Chrome Web Store Listing: CaptionRecorder
 
-**Last Updated**: 2026-09-02  
+**Last Updated**: 2026-09-03  
 **Version**: 1.0.0  
 **Target Browser**: Chrome (Manifest V3), Firefox (Manifest V3), Safari  
 
 
 ## Listing Metadata
 
-- **Extension Name**: CaptionRecorder — AI Meeting Notes & Live Captions
-- **Short Description**: Record live captions from Google Meet, export to TXT, Markdown, SRT, and generate on-device AI summaries with Gemini Nano.
+- **Extension Name**: CaptionRecorder — Live Captions & Transcripts
+- **Short Description**: Record live closed captions from Google Meet with instant speaker turn tracking, and export to TXT, Markdown, SRT, and WebVTT.
 - **Category**: Productivity / Accessibility
 - **Default Language**: English (UI natively supports EN, DE, FR, RU, JA, KO, ZH)
 
 
 ## Detailed Description
 
-CaptionRecorder is a 100% private, on-device Chrome extension that records live closed captions during your Google Meet calls, reconciles real-time streaming speech revisions, and generates instant meeting summaries with actionable next steps using Chrome's built-in Gemini Nano AI.
+CaptionRecorder is a 100% private, on-device Chrome extension that records live closed captions during your Google Meet calls, tracks real-time speaker turns with instant finalization, and exports clean transcripts to Markdown, TXT, SRT, or WebVTT.
 
 ### Key Highlights
-- 🔒 **Zero Data Collection**: No servers, no telemetry, no third-party APIs, no API keys needed. All processing and local AI summarization run 100% on your device.
-- ⚡ **Stream Deduplication**: Live speech captions frequently revise earlier words as sentences finish. CaptionRecorder's stream reconciliation algorithm automatically eliminates stutter, duplicate words, and repeats.
-- 🧠 **On-Device AI Summaries**: Uses Chrome's built-in Gemini Nano (`window.ai`) to generate structured executive summaries, key discussion highlights, and action items with assignees.
-- 💾 **Unsaved Session & Reload Recovery**: Unexpected disconnect, call end, or page reload? CaptionRecorder buffers your active call to local storage, guarantees turn flushing on unload, and restores your transcript and AI summary directly in the Meet overlay and toolbar popup.
-- 📁 **Universal Export**: Export your meeting notes in seconds to Markdown (.md), Plain Text (.txt), SubRip subtitles (.srt), or WebVTT (.vtt), or copy to clipboard.
+- 🔒 **Zero Data Collection**: No servers, no telemetry, no third-party APIs, no API keys needed. All processing and caption recording run 100% locally on your device.
+- ⚡ **Switch-Driven Turn Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the UI ticker while tracking author chunk containers in the DOM, deterministically finalizing turns without stutter or duplicate sentences.
+- 💾 **Unsaved Session & Reload Recovery**: Unexpected disconnect, call end, or page reload? CaptionRecorder buffers your active call to local storage, guarantees turn flushing on unload, and restores your transcript directly in the Meet overlay and toolbar popup.
+- 📁 **Universal Export**: Export your meeting transcripts in seconds to Markdown (.md), Plain Text (.txt), SubRip subtitles (.srt), or WebVTT (.vtt), or copy to clipboard.
 - 🌐 **Natively Multilingual**: Automatically matches your browser's language (English, German, French, Russian, Japanese, Korean, Simplified Chinese).
 
 
@@ -37,10 +36,10 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 ## Privacy & Data Use Disclosures
 
 - **Does this extension collect user data?** No.
-- **Does this extension transmit user data to any remote server?** No. All captions, transcripts, and AI summarization run strictly on-device using Chrome's built-in APIs and local browser memory.
-- **Single Purpose**: Caption recording, transcript exporting, and on-device meeting summarization.
+- **Does this extension transmit user data to any remote server?** No. All captions, transcripts, and storage run strictly on-device using local browser memory.
+- **Single Purpose**: Caption recording and transcript exporting.
 
 
 ## Version History
 
-- **v1.0.0 (2026-09-02)**: Initial release with Google Meet caption recording, stream reconciliation engine, Gemini Nano on-device AI summarization, TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 7 native UI languages.
+- **v1.0.0 (2026-09-03)**: Google Meet caption recording, switch-driven turn finalization, TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 7 native UI languages.

@@ -1,18 +1,17 @@
 # CaptionRecorder 🎙️
 
-A modern, privacy-focused browser extension (Manifest V3) built with [WXT](https://wxt.dev/) and TypeScript. CaptionRecorder records live closed captions from video meetings, eliminates speech recognition stutter via real-time stream reconciliation, generates instant on-device AI meeting summaries using Chrome's built-in Gemini Nano (`window.ai`), and exports to TXT, Markdown, SubRip (SRT), and WebVTT formats.
+A modern, privacy-focused browser extension (Manifest V3) built with [WXT](https://wxt.dev/) and TypeScript. CaptionRecorder records live closed captions from video meetings with real-time speaker turn tracking, and exports clean transcripts to TXT, Markdown, SubRip (SRT), and WebVTT formats.
 
 Zero external framework dependencies. 100% private, on-device processing.
 
 
 ## ✨ Features
 
-- **🛡️ 100% Privacy-First**: All caption capture, processing, storage, and AI summarization happen locally on your machine. Zero cloud services, zero external API keys.
-- **⚡ Stream Reconciliation Engine**: Live closed captions revise speech in real time. CaptionRecorder uses sliding suffix-prefix overlap deduplication to absorb interim word revisions without stutter or duplicated sentences.
+- **🛡️ 100% Privacy-First**: All caption capture, processing, and storage happen locally on your machine. Zero cloud services, zero external API keys.
+- **⚡ Switch-Driven Caption Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the UI ticker while tracking author chunk containers in the DOM, deterministically finalizing turns when speakers pause, switch chunks, or change without stutter or duplicate sentences.
 - **🧩 Multi-Platform Adapter Architecture**: Decoupled `PlatformAdapter` interface.
   - **Google Meet** (`meet.google.com`) active now.
   - **Zoom Web** (`app.zoom.us/wc/*`) & **Microsoft Teams Web** (`teams.microsoft.com/*`) scheduled next.
-- **🧠 On-Device Gemini Nano AI**: Uses Chrome's built-in Prompt API (`ai.languageModel` / `window.ai`) to generate structured Executive Summaries, Key Discussion Points, and Action Items. Employs smart hierarchical chunking for long meetings.
 - **🌐 Native Multi-Language UI**: Automatically adapts to your browser's language with zero configuration. Supports **English (en)**, **German (de)**, **French (fr)**, **Russian (ru)**, **Japanese (ja)**, **Korean (ko)**, and **Simplified Chinese (zh)**.
 - **💾 Crash & Tab Close Recovery**: Continuously mirrors live meeting state to local browser storage. If a tab is closed unexpectedly, the extension toolbar popup allows 1-click recovery and export.
 - **📁 Multi-Format Export**: Export to formatted **Markdown (.md)**, **Plain Text (.txt)**, **SubRip (.srt)**, or **WebVTT (.vtt)** with 1-click clipboard copy.
@@ -99,18 +98,6 @@ npm run format
 ```
 
 
-## 🧠 Enabling Chrome Built-in AI (Gemini Nano)
-
-On-device Gemini Nano is built into modern Chrome versions. To verify or enable it:
-
-1. In Chrome, navigate to `chrome://flags/#optimization-guide-on-device-model` and set it to **Enabled BypassPerfRequirement**.
-2. Navigate to `chrome://flags/#prompt-api-for-gemini-nano` and set it to **Enabled**.
-3. Relaunch Chrome.
-4. Navigate to `chrome://components` and ensure **Optimization Guide On Device Model** is downloaded and up to date.
-
-*(On Firefox and Safari, CaptionRecorder detects the absence of `window.ai` and keeps all recording and export capabilities 100% operational).*
-
-
 ## 📂 Project Structure
 
 ```
@@ -124,14 +111,12 @@ caption-recorder/
 │   │   └── index.ts               # Adapter factory
 │   ├── core/                      # Core business logic
 │   │   ├── types.ts               # Domain types
-│   │   ├── StreamReconciler.ts    # Suffix-prefix deduplication algorithm
 │   │   └── exporters.ts           # TXT, Markdown, SRT, WebVTT exporters
 │   ├── i18n/                      # Native multi-language engine
 │   │   ├── types.ts
 │   │   ├── locales/               # en, de, fr, ru, ja, ko, zh
 │   │   └── index.ts               # Auto-detection & typed translation lookup
 │   ├── services/
-│   │   ├── GeminiNanoService.ts   # Chrome Prompt API & hierarchical chunking
 │   │   └── DraftStorageService.ts # Local storage mirroring & crash recovery
 │   ├── ui/                        # Injected Shadow DOM overlay
 │   │   ├── CaptionOverlay.ts      # Draggable floating badge & drawer component
@@ -144,9 +129,11 @@ caption-recorder/
 │           ├── main.ts
 │           └── style.css
 ├── tests/                         # Vitest automated tests
-│   ├── StreamReconciler.test.ts
-│   ├── exporters.test.ts
-│   └── i18n.test.ts
+│   ├── CaptionOverlayRecovery.test.ts # Page reload draft persistence
+│   ├── DraftStorageService.test.ts    # Debounced storage caching
+│   ├── GoogleMeetAdapter.test.ts      # Chunk switching & DOM capture
+│   ├── exporters.test.ts              # TXT/MD/SRT/VTT formatting
+│   └── i18n.test.ts                   # Multilingual dictionary tests
 ├── wxt.config.ts                  # WXT configuration
 ├── eslint.config.js               # ESLint 9 configuration
 └── package.json

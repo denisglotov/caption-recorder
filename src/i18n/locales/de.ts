@@ -24,23 +24,7 @@ export const de: TranslationDict = {
   },
   tabs: {
     live: 'Live-Transkript',
-    summary: 'KI-Zusammenfassung',
     export: 'Exportieren',
-  },
-  summary: {
-    title: 'Zusammenfassung & Aktionspunkte',
-    generate: 'Mit Gemini Nano generieren',
-    generating: 'Transkript wird lokal analysiert...',
-    ready: 'Zusammenfassung erstellt',
-    copy: 'Kopieren',
-    copied: 'Kopiert!',
-    notAvailable: 'Lokales Gemini Nano ist derzeit nicht verfügbar.',
-    instructions:
-      'Aktivieren Sie chrome://flags/#optimization-guide-on-device-model und starten Sie Chrome neu.',
-    nonChrome:
-      'Lokales Gemini Nano ist exklusiv für Google Chrome. Aufzeichnung und Export funktionieren normal.',
-    empty: 'Noch kein Transkript zum Zusammenfassen vorhanden.',
-    languageAuto: 'Automatisch (wie Meeting)',
   },
   export: {
     title: 'Meeting exportieren',

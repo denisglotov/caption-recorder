@@ -319,44 +319,6 @@
   color: #bae6fd;
 }
 
-/* AI Summary Tab */
-.cr-ai-actions {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.cr-select {
-  background: rgba(255, 255, 255, 0.07);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  outline: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  height: 34px;
-}
-
-.cr-select:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.cr-select:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-.cr-select option {
-  background: #1e293b;
-  color: #f1f5f9;
-}
-
 .cr-btn-primary {
   background: #4f46e5;
   color: white;
@@ -398,27 +360,6 @@
 
 .cr-btn-secondary:hover {
   background: rgba(255, 255, 255, 0.14);
-}
-
-.cr-ai-box {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 14px;
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #cbd5e1;
-}
-
-.cr-ai-notice {
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: 8px;
-  padding: 12px;
-  color: #bae6fd;
-  font-size: 12px;
-  margin-bottom: 12px;
 }
 
 /* Export Tab */

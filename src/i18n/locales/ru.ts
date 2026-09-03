@@ -24,23 +24,7 @@ export const ru: TranslationDict = {
   },
   tabs: {
     live: 'Транскрипт',
-    summary: 'ИИ-Сводка',
     export: 'Экспорт',
-  },
-  summary: {
-    title: 'Сводка встречи и задачи',
-    generate: 'Создать с Gemini Nano',
-    generating: 'Анализ транскрипта на устройстве...',
-    ready: 'Сводка готова',
-    copy: 'Скопировать сводку',
-    copied: 'Скопировано!',
-    notAvailable: 'Локальная модель Gemini Nano сейчас недоступна.',
-    instructions:
-      'Включите chrome://flags/#optimization-guide-on-device-model и перезапустите Chrome.',
-    nonChrome:
-      'Локальный Gemini Nano доступен только в Google Chrome. Запись субтитров и экспорт работают штатно.',
-    empty: 'Пока нет транскрипта для создания сводки.',
-    languageAuto: 'Авто (как во встрече)',
   },
   export: {
     title: 'Экспорт встречи',

@@ -22,21 +22,7 @@ export interface TranslationDict {
   };
   tabs: {
     live: string;
-    summary: string;
     export: string;
-  };
-  summary: {
-    title: string;
-    generate: string;
-    generating: string;
-    ready: string;
-    copy: string;
-    copied: string;
-    notAvailable: string;
-    instructions: string;
-    nonChrome: string;
-    empty: string;
-    languageAuto: string;
   };
   export: {
     title: string;

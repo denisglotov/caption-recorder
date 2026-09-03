@@ -8,7 +8,7 @@ export default defineConfig({
   },
   manifest: {
     name: 'CaptionRecorder',
-    description: 'Privacy-first live closed caption recorder and on-device Gemini Nano meeting summarizer.',
+    description: 'Privacy-first live closed caption recorder and meeting transcript exporter.',
     version: '1.0.0',
     permissions: ['storage'],
     host_permissions: ['https://meet.google.com/*'],

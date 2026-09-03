@@ -24,23 +24,7 @@ export const fr: TranslationDict = {
   },
   tabs: {
     live: 'Transcription en direct',
-    summary: 'Résumé IA',
     export: 'Exporter',
-  },
-  summary: {
-    title: 'Résumé & Plans d’action',
-    generate: 'Générer avec Gemini Nano',
-    generating: 'Analyse locale de la transcription...',
-    ready: 'Résumé généré',
-    copy: 'Copier le résumé',
-    copied: 'Copié !',
-    notAvailable: 'Gemini Nano local n’est pas disponible actuellement.',
-    instructions:
-      'Activez chrome://flags/#optimization-guide-on-device-model et redémarrez Chrome.',
-    nonChrome:
-      'Gemini Nano local est exclusif à Google Chrome. L’enregistrement et l’export fonctionnent normalement.',
-    empty: 'Aucune transcription disponible à résumer pour le moment.',
-    languageAuto: 'Auto (comme la réunion)',
   },
   export: {
     title: 'Exporter la réunion',

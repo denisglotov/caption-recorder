@@ -195,11 +195,10 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
           text: 'Second point in discussion.',
         },
       ],
-      aiSummary: '### Executive Summary\nAll points covered.',
     };
   }
 
-  it('restores draft session segments, duration, stats, AI summary, and drawer on mount', async () => {
+  it('restores draft session segments, duration, stats, and drawer on mount', async () => {
     const draft = createSavedMeetingDraft();
     await DraftStorageService.saveDraftImmediate(draft);
 
@@ -212,7 +211,6 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     expect(session.id).toBe('session_saved_123');
     expect(session.segments.length).toBe(2);
     expect(session.segments[0].speaker).toBe('Denis');
-    expect(session.aiSummary).toBe('### Executive Summary\nAll points covered.');
 
     // Timer should be restored to 60 seconds: 00:01:00
     const timerEl = elementsById.get('cr-timer');
@@ -223,10 +221,6 @@ describe('CaptionOverlay Draft Recovery Across Page Reloads', () => {
     const turnCountEl = elementsById.get('cr-stat-turns');
     expect(turnCountEl?.textContent).toBe('2');
     expect(Number(wordCountEl?.textContent)).toBeGreaterThan(0);
-
-    // AI summary box should display restored summary
-    const aiOutputEl = elementsById.get('cr-ai-output');
-    expect(aiOutputEl?.textContent).toBe('### Executive Summary\nAll points covered.');
 
     // Since draft.endTime was set (meeting completed), drawer should be open
     const drawerEl = elementsById.get('cr-drawer');

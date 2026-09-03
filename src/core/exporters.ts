@@ -64,12 +64,6 @@ export function exportToTxt(session: MeetingSession): string {
   lines.push(`Platform: ${session.platform}`);
   lines.push(`=======================================================\n`);
 
-  if (session.aiSummary) {
-    lines.push(`--- AI SUMMARY (Gemini Nano) ---\n`);
-    lines.push(session.aiSummary);
-    lines.push(`\n--------------------------------\n`);
-  }
-
   lines.push(`--- FULL TRANSCRIPT ---\n`);
   for (const seg of session.segments) {
     const time = formatTime(seg.startTime, baseTime);
@@ -95,12 +89,6 @@ export function exportToMarkdown(session: MeetingSession): string {
   }
   lines.push(`- **Platform**: ${session.platform}`);
   lines.push(`- **Participants**: ${speakers.join(', ') || 'None'}\n`);
-
-  if (session.aiSummary) {
-    lines.push(`## 🧠 AI Summary & Action Items\n`);
-    lines.push(session.aiSummary);
-    lines.push('');
-  }
 
   lines.push(`## 📝 Transcript\n`);
   for (const seg of session.segments) {

@@ -15,7 +15,6 @@ describe('Exporters', () => {
     startTime: 1700000000000,
     endTime: 1700000065000,
     platform: 'google-meet',
-    aiSummary: 'Summary of discussion:\n- Shipped feature A\n- Next steps: feature B',
     segments: [
       {
         id: 'seg_1',
@@ -38,7 +37,6 @@ describe('Exporters', () => {
     const txt = exportToTxt(sampleSession);
     expect(txt).toContain('MEETING TRANSCRIPT: Product Sync');
     expect(txt).toContain('Platform: google-meet');
-    expect(txt).toContain('--- AI SUMMARY (Gemini Nano) ---');
     expect(txt).toContain('[00:00:00] Alice:');
     expect(txt).toContain('Hello everyone, welcome to the sync.');
     expect(txt).toContain('[00:00:06] Bob:');
@@ -49,7 +47,6 @@ describe('Exporters', () => {
     expect(md).toContain('# Product Sync');
     expect(md).toContain('- **Platform**: google-meet');
     expect(md).toContain('- **Participants**: Alice, Bob');
-    expect(md).toContain('## 🧠 AI Summary & Action Items');
     expect(md).toContain('## 📝 Transcript');
     expect(md).toContain('**[00:00:00] Alice**');
     expect(md).toContain('> Hello everyone, welcome to the sync.');

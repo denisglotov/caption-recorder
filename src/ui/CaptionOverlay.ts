@@ -6,7 +6,6 @@ import type {
   TranscriptSegment,
 } from '../core/types';
 import { downloadExport, exportToTxt, copyToClipboard, type ExportFormat } from '../core/exporters';
-import { GeminiNanoService } from '../services/GeminiNanoService';
 import { DraftStorageService } from '../services/DraftStorageService';
 import { t } from '../i18n';
 
@@ -39,10 +38,6 @@ export class CaptionOverlay {
 
   private drawerEl!: HTMLElement;
   private transcriptListEl!: HTMLElement;
-  private aiOutputEl!: HTMLElement;
-  private selAILang!: HTMLSelectElement;
-  private btnGenerateAI!: HTMLButtonElement;
-  private btnCopyAI!: HTMLButtonElement;
   private wordCountStatEl!: HTMLElement;
   private turnCountStatEl!: HTMLElement;
 
@@ -69,7 +64,6 @@ export class CaptionOverlay {
 
     this.initDOM();
     this.attachEventListeners();
-    this.loadSavedLanguage();
     this.checkCaptionsState();
     this.updateStats();
     this.restorePromise = this.restoreDraftSession();
@@ -143,7 +137,6 @@ export class CaptionOverlay {
 
         <div class="cr-tabs">
           <button class="cr-tab cr-active" data-tab="live">${t('tabs.live')}</button>
-          <button class="cr-tab" data-tab="summary">${t('tabs.summary')}</button>
           <button class="cr-tab" data-tab="export">${t('tabs.export')}</button>
         </div>
 
@@ -156,38 +149,7 @@ export class CaptionOverlay {
           </div>
         </div>
 
-        <!-- Tab 2: AI Summary -->
-        <div class="cr-tab-content" id="cr-tab-summary" style="display:none;">
-          <div class="cr-ai-notice" id="cr-ai-notice" style="display:none;"></div>
-          <div class="cr-ai-actions">
-            <select class="cr-select cr-ai-lang" id="cr-sel-ai-lang" title="Summary Language">
-              <option value="auto">${t('summary.languageAuto')}</option>
-              <option value="en">English</option>
-              <option value="es">Español</option>
-              <option value="de">Deutsch</option>
-              <option value="fr">Français</option>
-              <option value="ru">Русский</option>
-              <option value="ja">日本語</option>
-              <option value="ko">한국어</option>
-              <option value="zh">中文</option>
-              <option value="pt">Português</option>
-              <option value="it">Italiano</option>
-            </select>
-            <button class="cr-btn-primary" id="cr-btn-ai-gen">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-              <span>${t('summary.generate')}</span>
-            </button>
-            <button class="cr-btn-secondary" id="cr-btn-ai-copy" style="display:none;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>${t('summary.copy')}</span>
-            </button>
-          </div>
-          <div class="cr-ai-box" id="cr-ai-output">
-            ${t('summary.empty')}
-          </div>
-        </div>
-
-        <!-- Tab 3: Export -->
+        <!-- Tab 2: Export -->
         <div class="cr-tab-content" id="cr-tab-export" style="display:none;">
           <div class="cr-stats" style="margin-bottom:14px;">
             <div>${t('export.totalWords')}: <span class="cr-stat-val" id="cr-stat-words">0</span></div>
@@ -238,10 +200,6 @@ export class CaptionOverlay {
 
     this.drawerEl = this.shadowRoot.getElementById('cr-drawer')!;
     this.transcriptListEl = this.shadowRoot.getElementById('cr-transcript-list')!;
-    this.aiOutputEl = this.shadowRoot.getElementById('cr-ai-output')!;
-    this.selAILang = this.shadowRoot.getElementById('cr-sel-ai-lang') as HTMLSelectElement;
-    this.btnGenerateAI = this.shadowRoot.getElementById('cr-btn-ai-gen') as HTMLButtonElement;
-    this.btnCopyAI = this.shadowRoot.getElementById('cr-btn-ai-copy') as HTMLButtonElement;
     this.wordCountStatEl = this.shadowRoot.getElementById('cr-stat-words')!;
     this.turnCountStatEl = this.shadowRoot.getElementById('cr-stat-turns')!;
   }
@@ -264,21 +222,6 @@ export class CaptionOverlay {
         if (tabName) this.switchTab(tabName);
       });
     });
-
-    // AI Summary
-    this.selAILang?.addEventListener('change', async () => {
-      try {
-        if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
-          await chrome.storage.local.set({
-            caption_recorder_summary_lang: this.selAILang.value,
-          });
-        }
-      } catch (err) {
-        console.warn('[CaptionRecorder] Failed to save language preference', err);
-      }
-    });
-    this.btnGenerateAI.addEventListener('click', () => this.handleGenerateAI());
-    this.btnCopyAI.addEventListener('click', () => this.handleCopyAI());
 
     // Exports
     const exportFormats: ExportFormat[] = ['txt', 'md', 'srt', 'vtt'];
@@ -494,105 +437,13 @@ export class CaptionOverlay {
       tab.classList.toggle('cr-active', tab.getAttribute('data-tab') === activeTab);
     });
 
-    const contents = ['live', 'summary', 'export'];
+    const contents = ['live', 'export'];
     contents.forEach((id) => {
       const contentEl = this.shadowRoot.getElementById(`cr-tab-${id}`);
       if (contentEl) {
         contentEl.style.display = id === activeTab ? 'block' : 'none';
       }
     });
-
-    if (activeTab === 'summary') {
-      this.checkAIStatus();
-    }
-  }
-
-  private async checkAIStatus(): Promise<void> {
-    const status = await GeminiNanoService.checkAvailability();
-    const noticeEl = this.shadowRoot.getElementById('cr-ai-notice');
-    if (!noticeEl) return;
-
-    if (status.status === 'unsupported-browser') {
-      noticeEl.textContent = t('summary.nonChrome');
-      noticeEl.style.display = 'block';
-      this.btnGenerateAI.disabled = true;
-    } else if (status.status === 'after-download') {
-      noticeEl.textContent = t('summary.instructions');
-      noticeEl.style.display = 'block';
-    } else if (status.status === 'no') {
-      noticeEl.textContent = `${t('summary.notAvailable')} ${t('summary.instructions')}`;
-      noticeEl.style.display = 'block';
-    } else {
-      noticeEl.style.display = 'none';
-      this.btnGenerateAI.disabled = false;
-    }
-  }
-
-  private async handleGenerateAI(): Promise<void> {
-    const segments = this.session.segments;
-    if (segments.length === 0) {
-      this.aiOutputEl.textContent = t('summary.empty');
-      return;
-    }
-
-    this.btnGenerateAI.disabled = true;
-    this.aiOutputEl.textContent = t('summary.generating');
-
-    const targetLang = this.selAILang ? this.selAILang.value : 'auto';
-
-    try {
-      const summary = await GeminiNanoService.summarizeMeeting(
-        segments,
-        (progress) => {
-          this.aiOutputEl.textContent = progress;
-        },
-        targetLang
-      );
-
-      if (summary && summary.trim()) {
-        this.session.aiSummary = summary;
-        this.aiOutputEl.textContent = summary;
-        this.btnCopyAI.style.display = 'inline-flex';
-        DraftStorageService.saveDraftImmediate(this.session);
-      } else {
-        this.aiOutputEl.textContent = 'No summary could be generated. Please try again.';
-        this.btnCopyAI.style.display = 'none';
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.aiOutputEl.textContent = `Summary error: ${message}`;
-      this.btnCopyAI.style.display = 'none';
-    } finally {
-      this.btnGenerateAI.disabled = false;
-    }
-  }
-
-  private async loadSavedLanguage(): Promise<void> {
-    try {
-      if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
-        const stored = await chrome.storage.local.get('caption_recorder_summary_lang');
-        const saved = stored?.caption_recorder_summary_lang;
-        if (saved && this.selAILang) {
-          this.selAILang.value = saved;
-        }
-      }
-    } catch (err) {
-      console.warn('[CaptionRecorder] Failed to load language preference', err);
-    }
-  }
-
-  private async handleCopyAI(): Promise<void> {
-    if (this.session.aiSummary) {
-      const success = await copyToClipboard(this.session.aiSummary);
-      if (success) {
-        const span = this.btnCopyAI.querySelector('span')!;
-        const originalText = span.textContent;
-        span.textContent = t('summary.copied');
-        setTimeout(() => {
-          span.textContent = originalText;
-        }, 2000);
-      }
-    }
   }
 
   private renderTranscriptList(force: boolean = false): void {
@@ -804,7 +655,6 @@ export class CaptionOverlay {
         startTime: draft.startTime || this.session.startTime,
         endTime: draft.endTime,
         segments: [...draft.segments],
-        aiSummary: draft.aiSummary,
         platform: draft.platform || 'google-meet',
         savedAt: draft.savedAt,
         url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
@@ -820,11 +670,6 @@ export class CaptionOverlay {
       this.updateTimerDisplay();
       this.updateStats();
       this.renderTranscriptList(true);
-
-      if (draft.aiSummary) {
-        this.aiOutputEl.textContent = draft.aiSummary;
-        this.btnCopyAI.style.display = 'inline-flex';
-      }
 
       const lastSeg = draft.segments[draft.segments.length - 1];
       if (lastSeg) {
@@ -931,8 +776,6 @@ export class CaptionOverlay {
     this.hideRecoveryBanner();
     this.updateNewMeetingButtons(false);
 
-    this.aiOutputEl.textContent = t('summary.empty');
-    this.btnCopyAI.style.display = 'none';
     this.tickerEl.textContent = t('nudge.noCaptionsYet');
     this.dotEl.className = 'cr-dot';
     this.btnStart.style.display = 'flex';
