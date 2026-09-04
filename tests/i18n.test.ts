@@ -9,8 +9,10 @@ describe('i18n subsystem', () => {
   it('translates keys and reflects locale changes', () => {
     setLocale('en');
     expect(t('controls.newSession')).toBe('New Meeting');
+    expect(t('controls.closePanel')).toBe('Close Panel');
+    expect(t('controls.discardSession')).toBe('Discard Session');
     expect(t('tabs.live')).toBe('Live Transcript');
-    expect(t('popup.idleTitle')).toBe('Ready for Meetings');
+    expect(t('idle.title')).toBe('Ready for Meetings');
     expect(t('status.idle')).toBe('Idle');
     expect(t('metrics.duration')).toBe('Duration');
     expect(t('metrics.speakers')).toBe('Speakers');
@@ -19,7 +21,9 @@ describe('i18n subsystem', () => {
 
     setLocale('de');
     expect(t('controls.newSession')).toBe('Neues Meeting');
-    expect(t('popup.idleTitle')).toBe('Bereit für Meetings');
+    expect(t('controls.closePanel')).toBe('Panel schließen');
+    expect(t('controls.discardSession')).toBe('Sitzung verwerfen');
+    expect(t('idle.title')).toBe('Bereit für Meetings');
     expect(t('status.idle')).toBe('Bereit');
     expect(t('metrics.duration')).toBe('Dauer');
     expect(t('metrics.speakers')).toBe('Sprecher');

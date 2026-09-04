@@ -93,10 +93,10 @@ function localizeUI() {
   setTxt('tab-label-live', t('tabs.live'));
   setTxt('tab-label-export', t('tabs.export'));
   setTxt('btn-label-new-meeting', t('controls.newSession'));
-  setTxt('txt-idle-title', t('popup.idleTitle'));
-  setTxt('txt-idle-desc', t('popup.idleDesc'));
+  setTxt('txt-idle-title', t('idle.title'));
+  setTxt('txt-idle-desc', t('idle.desc'));
   setTxt('txt-copy-btn', t('export.copyClipboard'));
-  setTxt('txt-discard-btn', t('controls.newSession'));
+  setTxt('txt-discard-btn', t('controls.discardSession'));
   setTxt('lbl-duration', t('metrics.duration'));
   setTxt('lbl-speakers', t('metrics.speakers'));
   setTxt('lbl-words', t('metrics.words'));
@@ -105,7 +105,7 @@ function localizeUI() {
   setTxt('txt-export-subheading', t('export.subheading'));
 
   const btnClose = document.getElementById('btn-close-sidepanel');
-  if (btnClose) btnClose.title = t('controls.closeDrawer');
+  if (btnClose) btnClose.title = t('controls.closePanel');
 
   const manifest =
     typeof chrome !== 'undefined' && chrome.runtime?.getManifest
@@ -346,8 +346,8 @@ function renderTranscript(forceScroll: boolean = false) {
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <h3 id="txt-idle-title" class="empty-title">${escapeHtml(t('popup.idleTitle'))}</h3>
-          <p id="txt-idle-desc" class="empty-desc">${escapeHtml(t('popup.idleDesc'))}</p>
+          <h3 id="txt-idle-title" class="empty-title">${escapeHtml(t('idle.title'))}</h3>
+          <p id="txt-idle-desc" class="empty-desc">${escapeHtml(t('idle.desc'))}</p>
         </div>
       `;
     }

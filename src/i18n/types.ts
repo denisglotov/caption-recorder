@@ -1,8 +1,8 @@
 export interface TranslationDict {
   controls: {
-    openDrawer: string;
-    closeDrawer: string;
+    closePanel: string;
     newSession: string;
+    discardSession: string;
   };
   status: {
     idle: string;
@@ -14,9 +14,6 @@ export interface TranslationDict {
     speakers: string;
     words: string;
     turns: string;
-  };
-  nudge: {
-    noCaptionsYet: string;
   };
   tabs: {
     live: string;
@@ -31,23 +28,16 @@ export interface TranslationDict {
     subheading: string;
     copyClipboard: string;
     copied: string;
-    totalWords: string;
-    totalTurns: string;
   };
   recovery: {
     title: string;
     description: string;
-    recordedAt: string;
-    duration: string;
-    speakers: string;
-    download: string;
     discard: string;
     discardConfirm: string;
-    saved: string;
   };
-  popup: {
-    idleTitle: string;
-    idleDesc: string;
+  idle: {
+    title: string;
+    desc: string;
   };
 }
 
