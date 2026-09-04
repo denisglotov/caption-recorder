@@ -339,72 +339,64 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(adapter.isCaptionsEnabled()).toBe(true);
 
     // Button aria-pressed="true"
-    (
-      globalThis as unknown as { document: { querySelector: unknown; querySelectorAll: unknown } }
-    ).document.querySelector = vi.fn((sel: string) => {
-      if (sel.includes('r8qRAd') || sel.includes('aria-keyshortcuts')) {
-        return {
-          getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'true' : null),
-          textContent: '',
-        };
-      }
-      return null;
-    });
+    const pressedTrueBtn = {
+      getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'true' : null),
+      textContent: '',
+      closest: () => null,
+    };
     (
       globalThis as unknown as { document: { querySelectorAll: unknown } }
-    ).document.querySelectorAll = vi.fn(() => []);
+    ).document.querySelectorAll = vi.fn((sel: string) => {
+      if (sel.includes('r8qRAd') || sel.includes('aria-keyshortcuts')) {
+        return [pressedTrueBtn];
+      }
+      return [];
+    });
     expect(adapter.isCaptionsEnabled()).toBe(true);
 
+
     // Button aria-pressed="false"
-    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+    (globalThis as unknown as { document: { querySelectorAll: unknown } }).document.querySelectorAll =
       vi.fn((sel: string) => {
         if (sel.includes('r8qRAd')) {
-          return {
-            getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'false' : null),
-            textContent: '',
-          };
+          return [{ getAttribute: (attr: string) => (attr === 'aria-pressed' ? 'false' : null), textContent: '', closest: () => null }];
         }
-        return null;
+        return [];
       });
     expect(adapter.isCaptionsEnabled()).toBe(false);
 
     // Button with icon text closed_caption (active)
-    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+    (globalThis as unknown as { document: { querySelectorAll: unknown } }).document.querySelectorAll =
       vi.fn((sel: string) => {
         if (sel.includes('r8qRAd')) {
-          return {
-            getAttribute: () => null,
-            textContent: 'closed_caption',
-          };
+          return [{ getAttribute: () => null, textContent: 'closed_caption', closest: () => null }];
         }
-        return null;
+        return [];
       });
     expect(adapter.isCaptionsEnabled()).toBe(true);
 
     // Button with icon text closed_caption_off (inactive)
-    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+    (globalThis as unknown as { document: { querySelectorAll: unknown } }).document.querySelectorAll =
       vi.fn((sel: string) => {
         if (sel.includes('r8qRAd')) {
-          return {
-            getAttribute: () => null,
-            textContent: 'closed_caption_off',
-          };
+          return [{ getAttribute: () => null, textContent: 'closed_caption_off', closest: () => null }];
         }
-        return null;
+        return [];
       });
     expect(adapter.isCaptionsEnabled()).toBe(false);
   });
 
   it('notifies onCaptionsStateChange and flushes pending speech when CC is disabled', () => {
     let isCCEnabled = true;
-    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+    (globalThis as unknown as { document: { querySelectorAll: unknown } }).document.querySelectorAll =
       vi.fn((sel: string) => {
         if (sel.includes('r8qRAd')) {
-          return {
+          return [{
             getAttribute: (attr: string) => (attr === 'aria-pressed' ? String(isCCEnabled) : null),
-          };
+            closest: () => null,
+          }];
         }
-        return null;
+        return [];
       });
 
     const emitted: InterimCaption[] = [];

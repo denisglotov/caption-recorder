@@ -141,18 +141,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       }
     }
 
-    if (directCandidates.length === 0 && typeof document.querySelector === 'function') {
-      const directBtn = document.querySelector<HTMLElement>(
-        'button[aria-keyshortcuts="c"], ' +
-          'button[aria-keyshortcuts*="c"], ' +
-          'button[jsname="r8qRAd"], ' +
-          'button[data-tooltip-id*="caption" i], ' +
-          'button[data-tooltip*="caption" i], ' +
-          'button[aria-label*="caption" i]'
-      );
-      if (directBtn && !isJumpButton(directBtn)) return directBtn;
-    }
-
     // 2. Scan buttons for Material Icons (Google uses closed_caption / subtitles ligature font names)
     const buttons =
       typeof document.querySelectorAll === 'function'
