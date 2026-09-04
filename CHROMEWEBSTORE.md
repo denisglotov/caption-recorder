@@ -32,6 +32,7 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 | :--- | :--- | :--- |
 | `storage` | Browser Local Storage | Used to mirror the active meeting transcript locally to prevent data loss in case of accidental tab close or page reload, enabling unsaved meeting recovery in the Side Panel. |
 | `sidePanel` | Browser Side Panel | Required to display the transcript reader, live turn metrics, and export controls in a native browser sidebar without obscuring the video call. |
+| `tabs` | Browser Tabs | Required to connect the Side Panel to the active Google Meet tab to stream live speech captions and sync recording status. |
 | `host_permissions: https://meet.google.com/*` | Google Meet Web Calls | Required to observe closed caption DOM mutations in Google Meet tabs during live meetings. |
 
 

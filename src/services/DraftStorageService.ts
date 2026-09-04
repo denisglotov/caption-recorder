@@ -82,8 +82,11 @@ export class DraftStorageService {
 
   /**
    * Retrieve unsaved draft if one exists.
+   * @param includeEmpty If true, returns an active session draft even if 0 segments have been recorded yet.
    */
-  public static async getUnsavedDraft(): Promise<MeetingSession | null> {
+  public static async getUnsavedDraft(
+    includeEmpty: boolean = false
+  ): Promise<MeetingSession | null> {
     if (!this.isContextValid()) {
       return null;
     }
@@ -91,7 +94,7 @@ export class DraftStorageService {
     try {
       const result = await chrome.storage.local.get(DRAFT_KEY);
       const draft = result[DRAFT_KEY];
-      if (draft && Array.isArray(draft.segments) && draft.segments.length > 0) {
+      if (draft && Array.isArray(draft.segments) && (includeEmpty || draft.segments.length > 0)) {
         return draft as MeetingSession;
       }
     } catch (err: unknown) {

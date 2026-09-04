@@ -133,6 +133,8 @@ export class SessionRecorder {
     this.hasRecorded = true;
     this.session.endTime = undefined;
 
+    DraftStorageService.saveDraftImmediate(this.session);
+
     this.sendMessage({
       type: 'CR_STATUS_CHANGE',
       status: 'recording',
