@@ -10,6 +10,8 @@ interface ElementTurnInfo {
 }
 
 export class GoogleMeetAdapter implements PlatformAdapter {
+  public static readonly matchPatterns: readonly string[] = ['https://meet.google.com/*'];
+
   public readonly name = 'Google Meet';
   public readonly platformId = 'google-meet';
 
@@ -93,6 +95,16 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       /^https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i.test(url) ||
       /^https?:\/\/meet\.google\.com\/(_meet|lookup)\//i.test(url)
     );
+  }
+
+  public isSameMeeting(url1: string, url2: string): boolean {
+    try {
+      const u1 = new URL(url1);
+      const u2 = new URL(url2);
+      return u1.origin === u2.origin && u1.pathname === u2.pathname;
+    } catch {
+      return url1 === url2;
+    }
   }
 
   public findCaptionButton(): HTMLElement | null {

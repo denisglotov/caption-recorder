@@ -12,4 +12,5 @@ export interface PlatformAdapter {
   ): void;
   stop(): void;
   flush?(): void;
+  isSameMeeting?(url1: string, url2: string): boolean;
 }

@@ -444,6 +444,27 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(adapter.matchesUrl('https://google.com')).toBe(false);
   });
 
+  it('determines if two URLs belong to the same meeting room', () => {
+    expect(
+      adapter.isSameMeeting(
+        'https://meet.google.com/abc-defg-hij',
+        'https://meet.google.com/abc-defg-hij?authuser=1'
+      )
+    ).toBe(true);
+    expect(
+      adapter.isSameMeeting(
+        'https://meet.google.com/abc-defg-hij',
+        'https://meet.google.com/xyz-uvwx-rst'
+      )
+    ).toBe(false);
+    expect(
+      adapter.isSameMeeting(
+        'https://meet.google.com/abc-defg-hij',
+        'https://meet.google.com/landing'
+      )
+    ).toBe(false);
+  });
+
   it('tracks speech startTime on pending captions and preserves it when finalized', () => {
     const emitted: InterimCaption[] = [];
     const activeDrafts: (InterimCaption | null)[] = [];

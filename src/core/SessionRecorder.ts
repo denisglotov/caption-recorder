@@ -34,7 +34,8 @@ export class SessionRecorder {
     const now = Date.now();
     this.session = {
       id: `session_${now}`,
-      title: typeof document !== 'undefined' ? document.title || 'Google Meet' : 'Google Meet',
+      title:
+        typeof document !== 'undefined' ? document.title || this.adapter.name : this.adapter.name,
       startTime: now,
       segments: [],
       platform: this.adapter.platformId,
@@ -202,11 +203,13 @@ export class SessionRecorder {
         id: draft.id || this.session.id,
         title:
           draft.title ||
-          (typeof document !== 'undefined' ? document.title || 'Google Meet' : 'Google Meet'),
+          (typeof document !== 'undefined'
+            ? document.title || this.adapter.name
+            : this.adapter.name),
         startTime: draft.startTime || this.session.startTime,
         endTime: draft.endTime,
         segments: [...draft.segments],
-        platform: draft.platform || 'google-meet',
+        platform: draft.platform || this.adapter.platformId,
         savedAt: draft.savedAt,
         url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
       };
@@ -234,7 +237,8 @@ export class SessionRecorder {
     const now = Date.now();
     this.session = {
       id: `session_${now}`,
-      title: typeof document !== 'undefined' ? document.title || 'Google Meet' : 'Google Meet',
+      title:
+        typeof document !== 'undefined' ? document.title || this.adapter.name : this.adapter.name,
       startTime: now,
       segments: [],
       platform: this.adapter.platformId,
@@ -324,6 +328,8 @@ export class SessionRecorder {
   }
 
   public destroy(): void {
+    this.handleUnload();
+
     if (typeof window !== 'undefined') {
       window.removeEventListener('beforeunload', this.unloadHandler);
       window.removeEventListener('pagehide', this.unloadHandler);
@@ -338,5 +344,7 @@ export class SessionRecorder {
       chrome.runtime.onMessage.removeListener(this.messageHandler);
       this.messageHandler = null;
     }
+
+    this.adapter.stop();
   }
 }

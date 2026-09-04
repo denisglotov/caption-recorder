@@ -322,4 +322,17 @@ describe('SessionRecorder Headless Coordinator', () => {
     expect(resetResponse).toEqual({ success: true });
     recorder.destroy();
   });
+
+  it('cleans up listeners and stops adapter on destroy', async () => {
+    const recorder = new SessionRecorder(mockAdapter);
+    await recorder.restorePromise;
+
+    recorder.destroy();
+
+    expect(window.removeEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    expect(window.removeEventListener).toHaveBeenCalledWith('pagehide', expect.any(Function));
+    expect(chrome.storage.onChanged.removeListener).toHaveBeenCalled();
+    expect(chrome.runtime.onMessage.removeListener).toHaveBeenCalled();
+    expect(mockAdapter.stop).toHaveBeenCalledTimes(1);
+  });
 });

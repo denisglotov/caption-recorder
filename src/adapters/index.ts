@@ -8,6 +8,8 @@ type AdapterConstructor = new () => PlatformAdapter;
 
 const adapterClasses: AdapterConstructor[] = [GoogleMeetAdapter];
 
+export const ADAPTER_MATCH_PATTERNS = [...GoogleMeetAdapter.matchPatterns];
+
 /**
  * Detect the appropriate platform adapter for the current URL.
  * Returns a fresh adapter instance to avoid shared mutable state.
