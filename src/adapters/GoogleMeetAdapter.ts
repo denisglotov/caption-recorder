@@ -366,7 +366,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.onCaptionCallback) return;
 
     this.checkCaptionsState();
-    if (!this.isCaptionsEnabled()) {
+    if (!this.lastKnownCaptionsEnabled) {
       return;
     }
 
