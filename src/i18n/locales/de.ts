@@ -6,6 +6,17 @@ export const de: TranslationDict = {
     closeDrawer: 'Panel schließen',
     newSession: 'Neues Meeting',
   },
+  status: {
+    idle: 'Bereit',
+    recording: 'Aufnahme',
+    paused: 'Pausiert',
+  },
+  metrics: {
+    duration: 'Dauer',
+    speakers: 'Sprecher',
+    words: 'Wörter',
+    turns: 'Wechsel',
+  },
   nudge: {
     noCaptionsYet: 'Warten auf Sprache...',
   },
@@ -13,7 +24,13 @@ export const de: TranslationDict = {
     live: 'Live-Transkript',
     export: 'Exportieren',
   },
+  live: {
+    recordingTitle: 'Untertitel werden aufgezeichnet',
+    recordingDesc: 'Warten auf Sprache in Google Meet. Wortmeldungen erscheinen hier in Echtzeit.',
+  },
   export: {
+    title: 'Transkript exportieren',
+    subheading: 'Wählen Sie das gewünschte Format zum Herunterladen Ihrer Aufnahme.',
     copyClipboard: 'In Zwischenablage kopieren',
     copied: 'Transkript in Zwischenablage kopiert!',
     totalWords: 'Wörter gesamt',

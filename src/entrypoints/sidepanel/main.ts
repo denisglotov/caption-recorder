@@ -97,6 +97,15 @@ function localizeUI() {
   setTxt('txt-idle-desc', t('popup.idleDesc'));
   setTxt('txt-copy-btn', t('export.copyClipboard'));
   setTxt('txt-discard-btn', t('controls.newSession'));
+  setTxt('lbl-duration', t('metrics.duration'));
+  setTxt('lbl-speakers', t('metrics.speakers'));
+  setTxt('lbl-words', t('metrics.words'));
+  setTxt('lbl-turns', t('metrics.turns'));
+  setTxt('txt-export-title', t('export.title'));
+  setTxt('txt-export-subheading', t('export.subheading'));
+
+  const btnClose = document.getElementById('btn-close-sidepanel');
+  if (btnClose) btnClose.title = t('controls.closeDrawer');
 
   const manifest =
     typeof chrome !== 'undefined' && chrome.runtime?.getManifest
@@ -291,11 +300,11 @@ function updateStatus(status: RecordingStatus) {
 
   pill.className = `status-pill status-${status}`;
   if (status === 'recording') {
-    label.textContent = 'Recording';
+    label.textContent = t('status.recording');
   } else if (status === 'paused') {
-    label.textContent = 'Paused';
+    label.textContent = t('status.paused');
   } else {
-    label.textContent = 'Idle';
+    label.textContent = t('status.idle');
   }
 
   const btnNew = document.getElementById('btn-new-meeting');
@@ -323,9 +332,9 @@ function renderTranscript(forceScroll: boolean = false) {
               <line x1="12" y1="19" x2="12" y2="22" />
             </svg>
           </div>
-          <h3 class="empty-title">Recording Captions</h3>
+          <h3 class="empty-title">${escapeHtml(t('live.recordingTitle'))}</h3>
           <p class="empty-desc">
-            Listening for speech in Google Meet. Spoken turns will appear here in real time.
+            ${escapeHtml(t('live.recordingDesc'))}
           </p>
         </div>
       `;
@@ -337,8 +346,8 @@ function renderTranscript(forceScroll: boolean = false) {
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <h3 id="txt-idle-title" class="empty-title">${t('popup.idleTitle')}</h3>
-          <p id="txt-idle-desc" class="empty-desc">${t('popup.idleDesc')}</p>
+          <h3 id="txt-idle-title" class="empty-title">${escapeHtml(t('popup.idleTitle'))}</h3>
+          <p id="txt-idle-desc" class="empty-desc">${escapeHtml(t('popup.idleDesc'))}</p>
         </div>
       `;
     }

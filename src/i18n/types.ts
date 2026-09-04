@@ -4,6 +4,17 @@ export interface TranslationDict {
     closeDrawer: string;
     newSession: string;
   };
+  status: {
+    idle: string;
+    recording: string;
+    paused: string;
+  };
+  metrics: {
+    duration: string;
+    speakers: string;
+    words: string;
+    turns: string;
+  };
   nudge: {
     noCaptionsYet: string;
   };
@@ -11,7 +22,13 @@ export interface TranslationDict {
     live: string;
     export: string;
   };
+  live: {
+    recordingTitle: string;
+    recordingDesc: string;
+  };
   export: {
+    title: string;
+    subheading: string;
     copyClipboard: string;
     copied: string;
     totalWords: string;

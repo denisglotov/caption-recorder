@@ -6,6 +6,17 @@ export const zh: TranslationDict = {
     closeDrawer: '关闭面板',
     newSession: '新会议',
   },
+  status: {
+    idle: '待机',
+    recording: '录制中',
+    paused: '已暂停',
+  },
+  metrics: {
+    duration: '时长',
+    speakers: '发言人',
+    words: '词数',
+    turns: '轮次',
+  },
   nudge: {
     noCaptionsYet: '等待语音输入...',
   },
@@ -13,7 +24,13 @@ export const zh: TranslationDict = {
     live: '实时转录',
     export: '导出',
   },
+  live: {
+    recordingTitle: '正在录制字幕',
+    recordingDesc: '正在收听 Google Meet 语音。发言内容将实时显示在此处。',
+  },
   export: {
+    title: '导出转录',
+    subheading: '选择您喜欢的文件格式以下载录音。',
     copyClipboard: '复制到剪贴板',
     copied: '转录内容已复制到剪贴板！',
     totalWords: '总词数',

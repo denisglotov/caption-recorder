@@ -6,6 +6,17 @@ export const ru: TranslationDict = {
     closeDrawer: 'Закрыть панель',
     newSession: 'Новая встреча',
   },
+  status: {
+    idle: 'Ожидание',
+    recording: 'Запись',
+    paused: 'Пауза',
+  },
+  metrics: {
+    duration: 'Длительность',
+    speakers: 'Участники',
+    words: 'Слова',
+    turns: 'Реплики',
+  },
   nudge: {
     noCaptionsYet: 'Ожидание речи...',
   },
@@ -13,7 +24,13 @@ export const ru: TranslationDict = {
     live: 'Транскрипт',
     export: 'Экспорт',
   },
+  live: {
+    recordingTitle: 'Запись субтитров',
+    recordingDesc: 'Ожидание речи в Google Meet. Реплики появятся здесь в реальном времени.',
+  },
   export: {
+    title: 'Экспорт транскрипта',
+    subheading: 'Выберите формат для скачивания вашей записи.',
     copyClipboard: 'Скопировать в буфер обмена',
     copied: 'Транскрипт скопирован в буфер обмена!',
     totalWords: 'Всего слов',
