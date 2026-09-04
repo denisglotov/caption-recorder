@@ -6,6 +6,17 @@ export const it: TranslationDict = {
     closeDrawer: 'Chiudi pannello',
     newSession: 'Nuova riunione',
   },
+  status: {
+    idle: 'In attesa',
+    recording: 'Registrazione',
+    paused: 'In pausa',
+  },
+  metrics: {
+    duration: 'Durata',
+    speakers: 'Partecipanti',
+    words: 'Parole',
+    turns: 'Turni',
+  },
   nudge: {
     noCaptionsYet: 'In attesa del parlato...',
   },
@@ -13,7 +24,13 @@ export const it: TranslationDict = {
     live: 'Trascrizione in tempo reale',
     export: 'Esporta',
   },
+  live: {
+    recordingTitle: 'Registrazione sottotitoli',
+    recordingDesc: 'In ascolto su Google Meet. Gli interventi appariranno qui in tempo reale.',
+  },
   export: {
+    title: 'Esporta trascrizione',
+    subheading: 'Scegli il formato preferito per scaricare la registrazione.',
     copyClipboard: 'Copia trascrizione negli appunti',
     copied: 'Trascrizione copiata negli appunti!',
     totalWords: 'Parole totali',

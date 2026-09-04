@@ -6,6 +6,17 @@ export const en: TranslationDict = {
     closeDrawer: 'Close Panel',
     newSession: 'New Meeting',
   },
+  status: {
+    idle: 'Idle',
+    recording: 'Recording',
+    paused: 'Paused',
+  },
+  metrics: {
+    duration: 'Duration',
+    speakers: 'Speakers',
+    words: 'Words',
+    turns: 'Turns',
+  },
   nudge: {
     noCaptionsYet: 'Waiting for speech...',
   },
@@ -13,7 +24,14 @@ export const en: TranslationDict = {
     live: 'Live Transcript',
     export: 'Export',
   },
+  live: {
+    recordingTitle: 'Recording Captions',
+    recordingDesc:
+      'Listening for speech in Google Meet. Spoken turns will appear here in real time.',
+  },
   export: {
+    title: 'Export Transcript',
+    subheading: 'Choose your preferred format to download your recording.',
     copyClipboard: 'Copy Transcript to Clipboard',
     copied: 'Transcript copied to clipboard!',
     totalWords: 'Total words',

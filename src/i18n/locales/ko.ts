@@ -6,6 +6,17 @@ export const ko: TranslationDict = {
     closeDrawer: '패널 닫기',
     newSession: '새 회의',
   },
+  status: {
+    idle: '대기 중',
+    recording: '기록 중',
+    paused: '일시 정지',
+  },
+  metrics: {
+    duration: '진행 시간',
+    speakers: '참여자',
+    words: '단어 수',
+    turns: '발화 턴',
+  },
   nudge: {
     noCaptionsYet: '대화 대기 중...',
   },
@@ -13,7 +24,13 @@ export const ko: TranslationDict = {
     live: '실시간 전사',
     export: '내보내기',
   },
+  live: {
+    recordingTitle: '자막 기록 중',
+    recordingDesc: 'Google Meet에서 음성을 대기 중입니다. 발언 내용이 실시간으로 표시됩니다.',
+  },
   export: {
+    title: '전사 내용 내보내기',
+    subheading: '원하는 형식을 선택하여 녹음 데이터를 다운로드하세요.',
     copyClipboard: '클립보드에 복사',
     copied: '전사 내용이 클립보드에 복사되었습니다!',
     totalWords: '총 단어 수',
