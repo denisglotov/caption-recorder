@@ -1,6 +1,14 @@
 import type { InterimCaption } from '../core/types';
 import type { PlatformAdapter } from './PlatformAdapter';
 
+interface ElementTurnInfo {
+  id: string;
+  speaker: string;
+  text: string;
+  startTime: number;
+  emitted: boolean;
+}
+
 export class GoogleMeetAdapter implements PlatformAdapter {
   public readonly name = 'Google Meet';
   public readonly platformId = 'google-meet';
@@ -14,12 +22,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
 
   // Active chunk tracking for author-based switching
   private pendingCaption: {
+    id: string;
     speaker: string;
     el: HTMLElement;
+    trackKey: HTMLElement;
     text: string;
     startTime: number;
   } | null = null;
-  private emittedElements = new WeakSet<HTMLElement>();
+  private elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
   private lastEmittedText: string = '';
   private lastEmittedSpeaker: string = '';
 
@@ -88,23 +98,57 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   public findCaptionButton(): HTMLElement | null {
     if (typeof document === 'undefined' || !document.querySelector) return null;
 
+    const isJumpButton = (btn: HTMLElement): boolean => {
+      const ariaLabel =
+        typeof btn.getAttribute === 'function'
+          ? (btn.getAttribute('aria-label') || '').toLowerCase()
+          : '';
+      if (ariaLabel.includes('jump')) return true;
+      const text = (btn.textContent || '').toLowerCase();
+      if (text.includes('arrow_downward') || text.includes('jump')) return true;
+      if (typeof btn.closest === 'function' && btn.closest('.vNKgIf, .UDinHf, .IMKgW')) return true;
+      return false;
+    };
+
     // 1. Direct Google Meet CC button selectors (universal across locales)
-    const directBtn = document.querySelector<HTMLElement>(
-      'button[aria-keyshortcuts="c"], ' +
-        'button[aria-keyshortcuts*="c"], ' +
-        'button[jsname="r8qRAd"], ' +
-        'button[data-tooltip-id*="caption" i], ' +
-        'button[data-tooltip*="caption" i], ' +
-        'button[aria-label*="caption" i]'
-    );
-    if (directBtn) return directBtn;
+    const directCandidates =
+      typeof document.querySelectorAll === 'function'
+        ? document.querySelectorAll<HTMLElement>(
+            'button[aria-keyshortcuts="c"], ' +
+              'button[aria-keyshortcuts*="c"], ' +
+              'button[jsname="r8qRAd"], ' +
+              'button[data-tooltip-id*="caption" i], ' +
+              'button[data-tooltip*="caption" i], ' +
+              'button[aria-label*="caption" i]'
+          )
+        : [];
+    for (let i = 0; i < directCandidates.length; i++) {
+      const btn = directCandidates[i];
+      if (!isJumpButton(btn)) {
+        return btn;
+      }
+    }
+
+    if (directCandidates.length === 0 && typeof document.querySelector === 'function') {
+      const directBtn = document.querySelector<HTMLElement>(
+        'button[aria-keyshortcuts="c"], ' +
+          'button[aria-keyshortcuts*="c"], ' +
+          'button[jsname="r8qRAd"], ' +
+          'button[data-tooltip-id*="caption" i], ' +
+          'button[data-tooltip*="caption" i], ' +
+          'button[aria-label*="caption" i]'
+      );
+      if (directBtn && !isJumpButton(directBtn)) return directBtn;
+    }
 
     // 2. Scan buttons for Material Icons (Google uses closed_caption / subtitles ligature font names)
-    const buttons = document.querySelectorAll<HTMLElement>(
-      'button, [role="button"], [role="menuitem"]'
-    );
+    const buttons =
+      typeof document.querySelectorAll === 'function'
+        ? document.querySelectorAll<HTMLElement>('button, [role="button"], [role="menuitem"]')
+        : [];
     for (let i = 0; i < buttons.length; i++) {
       const btn = buttons[i];
+      if (isJumpButton(btn)) continue;
       const text = btn.textContent || '';
       if (text.includes('closed_caption') || text.includes('subtitles')) {
         return btn;
@@ -251,30 +295,39 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     this.pendingCaption = null;
     this.lastEmittedText = '';
     this.lastEmittedSpeaker = '';
-    this.emittedElements = new WeakSet<HTMLElement>();
+    this.elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
   }
 
   public flush(): void {
     if (!this.pendingCaption) return;
 
     this.onActiveCaptionCallback?.(null);
-    const { speaker, el, text, startTime } = this.pendingCaption;
+    const { id, speaker, trackKey, text, startTime } = this.pendingCaption;
     this.pendingCaption = null;
 
     const cleanText = text.trim();
     if (!cleanText || (speaker === this.lastEmittedSpeaker && cleanText === this.lastEmittedText)) {
-      if (el) this.emittedElements.add(el);
+      if (trackKey) {
+        const info = this.elementTurns.get(trackKey);
+        if (info) info.emitted = true;
+      }
       return;
     }
 
-    if (el) {
-      this.emittedElements.add(el);
+    if (trackKey) {
+      const info = this.elementTurns.get(trackKey);
+      if (info) {
+        info.emitted = true;
+        info.text = cleanText;
+        info.speaker = speaker;
+      }
     }
     this.lastEmittedSpeaker = speaker;
     this.lastEmittedText = cleanText;
 
     const now = Date.now();
     this.onCaptionCallback?.({
+      id,
       speaker: speaker.trim() || 'Speaker',
       text: cleanText,
       startTime: startTime || now,
@@ -361,30 +414,83 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
   }
 
+  private getCaptionTrackKey(textEl: HTMLElement): HTMLElement {
+    const block =
+      (typeof textEl.closest === 'function' &&
+        textEl.closest<HTMLElement>(
+          '[jsname="dsyhDe"] > div, .nMcdL, .bj4p3b, .nMxHgf, [jscontroller="TEZ40e"]'
+        )) ||
+      textEl.parentElement?.parentElement ||
+      textEl.parentElement;
+
+    return block || textEl;
+  }
+
+  private generateTurnId(startTime: number): string {
+    return `seg_${startTime}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   private processCaptionElement(textEl: HTMLElement): void {
     if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
-
-    if (this.emittedElements.has(textEl)) return;
 
     const text = textEl.textContent?.trim() || '';
     if (!this.isValidCaptionText(text)) return;
 
     const speaker = this.extractSpeakerForTextElement(textEl);
+    const trackKey = this.getCaptionTrackKey(textEl);
 
-    // Skip lingering caption that was already emitted
-    if (speaker === this.lastEmittedSpeaker && text === this.lastEmittedText) {
-      this.emittedElements.add(textEl);
+    const existingTurn = this.elementTurns.get(trackKey);
+
+    // Case 1: The turn for this element was already emitted as a segment.
+    if (existingTurn?.emitted) {
+      // If text and speaker are identical, skip unchanged lingering caption (no duplicate emit).
+      if (existingTurn.text === text && existingTurn.speaker === speaker) {
+        return;
+      }
+
+      // Speech recognition revised/translated an earlier phrase in the DOM: update in-place!
+      existingTurn.text = text;
+      existingTurn.speaker = speaker;
+      this.lastEmittedSpeaker = speaker;
+      this.lastEmittedText = text;
+
+      const now = Date.now();
+      this.onCaptionCallback?.({
+        id: existingTurn.id,
+        speaker: speaker.trim() || 'Speaker',
+        text,
+        startTime: existingTurn.startTime,
+        timestamp: now,
+      });
       return;
     }
 
-    // If same chunk element and same speaker: update current speech draft
+    // Case 2: Skip lingering caption that matches the last emitted text/speaker if not tracked
+    if (speaker === this.lastEmittedSpeaker && text === this.lastEmittedText) {
+      const now = Date.now();
+      const id = this.generateTurnId(now);
+      this.elementTurns.set(trackKey, {
+        id,
+        speaker,
+        text,
+        startTime: now,
+        emitted: true,
+      });
+      return;
+    }
+
+    // Case 3: Same chunk element and same speaker: update current speech draft
     if (
       this.pendingCaption &&
-      this.pendingCaption.el === textEl &&
+      this.pendingCaption.trackKey === trackKey &&
       this.pendingCaption.speaker === speaker
     ) {
       this.pendingCaption.text = text;
+      if (existingTurn) {
+        existingTurn.text = text;
+      }
       this.onActiveCaptionCallback?.({
+        id: this.pendingCaption.id,
         speaker: speaker.trim() || 'Speaker',
         text,
         startTime: this.pendingCaption.startTime,
@@ -393,20 +499,33 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       return;
     }
 
-    // Chunk element or author switched: finalize previous chunk immediately
+    // Case 4: Chunk element or author switched: finalize previous chunk immediately
     this.flush();
 
     const now = Date.now();
+    const turnId = existingTurn?.id || this.generateTurnId(now);
+    const turnInfo: ElementTurnInfo = {
+      id: turnId,
+      speaker,
+      text,
+      startTime: existingTurn?.startTime || now,
+      emitted: false,
+    };
+    this.elementTurns.set(trackKey, turnInfo);
+
     this.pendingCaption = {
+      id: turnId,
       speaker,
       el: textEl,
+      trackKey,
       text,
-      startTime: now,
+      startTime: turnInfo.startTime,
     };
     this.onActiveCaptionCallback?.({
+      id: turnId,
       speaker: speaker.trim() || 'Speaker',
       text,
-      startTime: now,
+      startTime: turnInfo.startTime,
       timestamp: now,
     });
   }

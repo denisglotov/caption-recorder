@@ -205,6 +205,46 @@ describe('SessionRecorder Headless Coordinator', () => {
     recorder.destroy();
   });
 
+  it('updates existing segment in-place and broadcasts CR_UPDATE_TURN when caption id matches an existing segment', async () => {
+    let onFinalizedCb: ((caption: InterimCaption) => void) | undefined;
+    mockAdapter.observe = vi.fn((onFinalized) => {
+      onFinalizedCb = onFinalized;
+    });
+
+    const draft = createSavedMeetingDraft();
+    await DraftStorageService.saveDraftImmediate(draft);
+
+    const recorder = new SessionRecorder(mockAdapter);
+    await recorder.restorePromise;
+
+    expect(onFinalizedCb).toBeDefined();
+
+    // Re-emit seg_1 with updated Japanese translation/transcription
+    await onFinalizedCb!({
+      id: 'seg_1',
+      speaker: 'Denis',
+      text: 'First discussion point updated with refined phrase.',
+      timestamp: 1000045,
+      startTime: 1000010,
+    });
+
+    const session = recorder.getSession();
+    expect(session.segments.length).toBe(2);
+    expect(session.segments[0].id).toBe('seg_1');
+    expect(session.segments[0].text).toBe('First discussion point updated with refined phrase.');
+    expect(session.segments[0].endTime).toBe(1000045);
+
+    // CR_UPDATE_TURN message sent to side panel
+    const updateMsg = sentMessages.find(
+      (m) => (m as { type?: string }).type === 'CR_UPDATE_TURN'
+    ) as { type: string; segment: { id: string; text: string } } | undefined;
+    expect(updateMsg).toBeDefined();
+    expect(updateMsg?.segment.id).toBe('seg_1');
+    expect(updateMsg?.segment.text).toBe('First discussion point updated with refined phrase.');
+
+    recorder.destroy();
+  });
+
   it('resets recorder session when draft is cleared from storage while paused', async () => {
     const draft = createSavedMeetingDraft();
     await DraftStorageService.saveDraftImmediate(draft);

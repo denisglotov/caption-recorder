@@ -7,6 +7,7 @@ export interface TranscriptSegment {
 }
 
 export interface InterimCaption {
+  id?: string;
   speaker: string;
   text: string;
   timestamp: number;
@@ -31,6 +32,7 @@ export type RecordingStatus = 'idle' | 'recording' | 'paused';
 export type ExtensionMessage =
   | { type: 'CR_STATUS_CHANGE'; status: RecordingStatus }
   | { type: 'CR_NEW_TURN'; segment: TranscriptSegment }
+  | { type: 'CR_UPDATE_TURN'; segment: TranscriptSegment }
   | { type: 'CR_ACTIVE_CAPTION'; caption: InterimCaption | null }
   | { type: 'CR_GET_STATUS' }
   | { type: 'CR_RESET_SESSION' };

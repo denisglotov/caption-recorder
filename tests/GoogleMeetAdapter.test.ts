@@ -481,4 +481,70 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted[0].startTime).toBe(10000);
     expect(emitted[0].timestamp).toBe(11000);
   });
+
+  it('re-emits updated caption with same id when Google Meet revises an already-finalized phrase (e.g. Japanese recognition revision from は関連。 to ありがとうございます。)', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    const { textEl: chunk1 } = createMockCaptionElement('は関連。', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk1
+    );
+
+    // Second chunk arrives (e.g. "Hello!"), flushing chunk1
+    const { textEl: chunk2 } = createMockCaptionElement('Hello!', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk2
+    );
+
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].speaker).toBe('You');
+    expect(emitted[0].text).toBe('は関連。');
+    const firstTurnId = emitted[0].id;
+    expect(firstTurnId).toBeDefined();
+
+    // Google Meet's Japanese ASR refines chunk1's text in the DOM
+    chunk1.textContent = ' ありがとうございます。 ';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk1
+    );
+
+    // Should emit an update with the exact same turn ID
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].id).toBe(firstTurnId);
+    expect(emitted[1].speaker).toBe('You');
+    expect(emitted[1].text).toBe('ありがとうございます。');
+
+    // Subsequent poll with unchanged text does not emit duplicate
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk1
+    );
+    expect(emitted.length).toBe(2);
+  });
+
+  it('does not treat Jump to most recent captions button as caption toggle button', () => {
+    const jumpBtn = {
+      tagName: 'BUTTON',
+      getAttribute: (attr: string) =>
+        attr === 'aria-label' ? 'Jump to most recent captions' : null,
+      textContent: 'Jump to bottom',
+      closest: (sel: string) => (sel.includes('vNKgIf') || sel.includes('IMKgW') ? {} : null),
+    };
+
+    (
+      globalThis as unknown as { document: { querySelector: unknown; querySelectorAll: unknown } }
+    ).document.querySelectorAll = vi.fn((sel: string) => {
+      if (sel.includes('aria-label*="caption"')) {
+        return [jumpBtn];
+      }
+      return [];
+    });
+    (globalThis as unknown as { document: { querySelector: unknown } }).document.querySelector =
+      vi.fn((sel: string) => {
+        if (sel.includes('caption')) return jumpBtn;
+        return null;
+      });
+
+    expect(adapter.findCaptionButton()).toBeNull();
+  });
 });

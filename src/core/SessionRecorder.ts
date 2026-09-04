@@ -78,8 +78,26 @@ export class SessionRecorder {
           this.resumeRecording();
         }
 
+        const segmentId =
+          caption.id || `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`;
+        const existingIndex = this.session.segments.findIndex((s) => s.id === segmentId);
+
+        if (existingIndex >= 0) {
+          const existing = this.session.segments[existingIndex];
+          existing.text = caption.text;
+          existing.endTime = caption.timestamp;
+          existing.speaker = caption.speaker;
+
+          DraftStorageService.saveDraftDebounced(this.session);
+          this.sendMessage({
+            type: 'CR_UPDATE_TURN',
+            segment: existing,
+          });
+          return;
+        }
+
         const segment: TranscriptSegment = {
-          id: `seg_${caption.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+          id: segmentId,
           speaker: caption.speaker,
           startTime: caption.startTime || caption.timestamp,
           endTime: caption.timestamp,

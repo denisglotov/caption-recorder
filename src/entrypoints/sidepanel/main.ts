@@ -497,6 +497,25 @@ function listenToExtensionMessages() {
       renderTranscript();
       updateMetrics();
       hideRecoveryBanner();
+    } else if (msg.type === 'CR_UPDATE_TURN' && msg.segment) {
+      if (!currentSession) {
+        currentSession = {
+          id: `session_${Date.now()}`,
+          title: 'Google Meet',
+          startTime: msg.segment.startTime,
+          segments: [msg.segment],
+          platform: 'google-meet',
+        };
+      } else {
+        const idx = currentSession.segments.findIndex((s) => s.id === msg.segment!.id);
+        if (idx >= 0) {
+          currentSession.segments[idx] = msg.segment;
+        } else {
+          currentSession.segments.push(msg.segment);
+        }
+      }
+      renderTranscript();
+      updateMetrics();
     } else if (msg.type === 'CR_ACTIVE_CAPTION') {
       activeDraft = msg.caption || null;
       renderTranscript();
