@@ -11,7 +11,7 @@ export default defineConfig({
     description: '__MSG_extensionDescription__',
     default_locale: 'en',
     version: '1.1.0',
-    permissions: ['storage'],
+    permissions: ['storage', 'sidePanel'],
     host_permissions: ['https://meet.google.com/*'],
     action: {
       default_title: '__MSG_extensionName__',

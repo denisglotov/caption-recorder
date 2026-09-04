@@ -18,8 +18,10 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 
 ### Key Highlights
 - 🔒 **Zero Data Collection**: No servers, no telemetry, no third-party APIs, no API keys needed. All processing and caption recording run 100% locally on your device.
-- ⚡ **Switch-Driven Turn Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the UI ticker while tracking author chunk containers in the DOM, deterministically finalizing turns without stutter or duplicate sentences.
-- 💾 **Unsaved Session & Reload Recovery**: Unexpected disconnect, call end, or page reload? CaptionRecorder buffers your active call to local storage, guarantees turn flushing on unload, and restores your transcript directly in the Meet overlay and toolbar popup.
+- ⚡ **Switch-Driven Turn Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the Side Panel while tracking author chunk containers in the DOM, deterministically finalizing turns without stutter or duplicate sentences.
+- 🔴 **Non-Intrusive Toolbar Badge**: No floating overlays or clutter over your video tiles. A subtle browser toolbar badge indicates when captions are actively recording.
+- 📑 **Dedicated Side Panel**: 1-click access to your full transcript, live metrics, and exports alongside your meeting.
+- 💾 **Unsaved Session & Reload Recovery**: Unexpected disconnect, call end, or page reload? CaptionRecorder buffers your active call to local storage, guarantees turn flushing on unload, and restores your transcript directly in the Side Panel.
 - 📁 **Universal Export**: Export your meeting transcripts in seconds to Markdown (.md), Plain Text (.txt), SubRip subtitles (.srt), or WebVTT (.vtt), or copy to clipboard.
 - 🌐 **Natively Multilingual**: Automatically matches your browser's language (English, Spanish, Portuguese, Italian, German, French, Russian, Japanese, Korean, Simplified Chinese).
 
@@ -28,8 +30,9 @@ CaptionRecorder is a 100% private, on-device Chrome extension that records live 
 
 | Permission | Scope | Plain-English Justification |
 | :--- | :--- | :--- |
-| `storage` | Browser Local Storage | Used to mirror the active meeting transcript locally to prevent data loss in case of accidental tab close or page reload, enabling unsaved meeting recovery in the overlay and extension popup. |
-| `host_permissions: https://meet.google.com/*` | Google Meet Web Calls | Required to inject the floating caption recorder overlay into Google Meet tabs and observe closed caption DOM mutations during live meetings. |
+| `storage` | Browser Local Storage | Used to mirror the active meeting transcript locally to prevent data loss in case of accidental tab close or page reload, enabling unsaved meeting recovery in the Side Panel. |
+| `sidePanel` | Browser Side Panel | Required to display the transcript reader, live turn metrics, and export controls in a native browser sidebar without obscuring the video call. |
+| `host_permissions: https://meet.google.com/*` | Google Meet Web Calls | Required to observe closed caption DOM mutations in Google Meet tabs during live meetings. |
 
 
 ## Privacy & Data Use Disclosures

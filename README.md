@@ -8,12 +8,14 @@ Zero external framework dependencies. 100% private, on-device processing.
 ## ✨ Features
 
 - **🛡️ 100% Privacy-First**: All caption capture, processing, and storage happen locally on your machine. Zero cloud services, zero external API keys.
-- **⚡ Switch-Driven Caption Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the UI ticker while tracking author chunk containers in the DOM, deterministically finalizing turns when speakers pause, switch chunks, or change without stutter or duplicate sentences.
+- **⚡ Switch-Driven Caption Finalization**: Live speech captions revise words in real time. CaptionRecorder streams intermediate speech to the Side Panel while tracking author chunk containers in the DOM, deterministically finalizing turns when speakers pause, switch chunks, or change without stutter or duplicate sentences.
 - **🧩 Multi-Platform Adapter Architecture**: Decoupled `PlatformAdapter` interface.
   - **Google Meet** (`meet.google.com`) active now.
   - **Zoom Web** (`app.zoom.us/wc/*`) & **Microsoft Teams Web** (`teams.microsoft.com/*`) scheduled next.
+- **🔴 Non-Intrusive Toolbar Badge**: Zero DOM injection or screen clutter in Google Meet. A native browser toolbar badge lights up with `REC` to confirm active recording.
+- **📑 Full-Height Side Panel UI**: 1-click opening of a dedicated sidebar to follow live transcripts, inspect speaker turns and duration metrics, and export cleanly.
 - **🌐 Native Multi-Language UI**: Automatically adapts to your browser's language with zero configuration. Supports **English (en)**, **Spanish (es)**, **Portuguese (pt)**, **Italian (it)**, **German (de)**, **French (fr)**, **Russian (ru)**, **Japanese (ja)**, **Korean (ko)**, and **Simplified Chinese (zh)**.
-- **💾 Crash & Tab Close Recovery**: Continuously mirrors live meeting state to local browser storage. If a tab is closed unexpectedly, the extension toolbar popup allows 1-click recovery and export.
+- **💾 Crash & Tab Close Recovery**: Continuously mirrors live meeting state to local browser storage. If a tab is closed unexpectedly, the extension Side Panel allows 1-click recovery and export.
 - **📁 Multi-Format Export**: Export to formatted **Markdown (.md)**, **Plain Text (.txt)**, **SubRip (.srt)**, or **WebVTT (.vtt)** with 1-click clipboard copy.
 - **🌐 Cross-Browser Ready**: Built with WXT to target **Google Chrome**, **Mozilla Firefox**, and **Apple Safari**.
 
