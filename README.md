@@ -1,14 +1,35 @@
 # CaptionRecorder 🎙️
 
-A modern, privacy-focused browser extension (Manifest V3) built with [WXT](https://wxt.dev/) and
-TypeScript. CaptionRecorder records live closed captions from video meetings with real-time speaker
-turn tracking, and exports clean transcripts to TXT, Markdown, SubRip (SRT), and WebVTT formats.
+A lightweight, minimalistic, and privacy-focused browser extension (Manifest V3) built with
+[WXT](https://wxt.dev/) and TypeScript. CaptionRecorder records live closed captions from video
+meetings with real-time speaker turn tracking, and exports clean transcripts to TXT, Markdown,
+SubRip (SRT), and WebVTT formats.
 
-Zero external framework dependencies. 100% private, on-device processing.
+**Minimalist by design:** Zero runtime dependencies, zero external UI frameworks, zero cloud
+telemetry, and zero meeting screen clutter. 100% private, on-device processing.
 
+## 🪶 Minimalist by Design
+
+CaptionRecorder is intentionally engineered to stay out of your way, keep your browser fast, and
+respect your resources:
+
+- **Zero Runtime Dependencies**: Exactly `0` npm runtime packages (`dependencies: {}`). Pure vanilla
+  TypeScript leveraging native browser capabilities.
+- **Zero Framework Bloat**: No heavy UI frameworks (React, Vue, Svelte) or bulky CSS libraries.
+  Native HTML/CSS and direct browser DOM APIs ensure instant loading and a featherweight bundle
+  size.
+- **Zero Screen Clutter**: Zero floating widgets, overlay buttons, or injected watermarks
+  obstructing your Google Meet tiles. Recording state is conveyed via a subtle native browser
+  toolbar badge (`REC`).
+- **Zero Network Calls & Telemetry**: 100% on-device execution. No tracking scripts, third-party
+  analytics, remote fonts, or background requests.
+- **Lean Memory Footprint**: Streamlined state machine that automatically cleans up resources to
+  keep memory usage minimal, even during long, multi-hour calls.
 
 ## ✨ Features
 
+- **🪶 Minimalist & Featherweight**: Zero runtime dependencies, zero UI bloat, tiny bundle size, and
+  lightning-fast execution with negligible memory usage.
 - **🛡️ 100% Privacy-First**: All caption capture, processing, and storage happen locally on your
   machine. Zero cloud services, zero external API keys.
 - **⚡ Switch-Driven Caption Finalization**: Live speech captions revise words in real time.
@@ -35,10 +56,10 @@ Zero external framework dependencies. 100% private, on-device processing.
 - **🌐 Cross-Browser Ready**: Built with WXT to target **Google Chrome**, **Mozilla Firefox**, and
   **Apple Safari**.
 
-
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 20+
 - npm
 
@@ -52,7 +73,6 @@ cd caption-recorder
 # Install dependencies
 npm install
 ```
-
 
 ## 🛠️ Development & Building
 
@@ -79,7 +99,6 @@ disables the automated runner by default so you can use your regular signed-in C
 5. Click **Load unpacked** and select the `.output/chrome-mv3` directory.
 6. WXT's client will automatically live-reload your extension whenever code changes are saved.
 
-
 ### Production Builds
 
 ```bash
@@ -99,7 +118,6 @@ npm run build:safari
 npm run zip
 npm run zip:firefox
 ```
-
 
 ## 🧪 Testing & Code Quality
 
