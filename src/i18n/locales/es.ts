@@ -2,9 +2,9 @@ import type { TranslationDict } from '../types';
 
 export const es: TranslationDict = {
   controls: {
-    openDrawer: 'Abrir panel',
-    closeDrawer: 'Cerrar panel',
+    closePanel: 'Cerrar panel',
     newSession: 'Nueva reunión',
+    discardSession: 'Descartar sesión',
   },
   status: {
     idle: 'En espera',
@@ -16,9 +16,6 @@ export const es: TranslationDict = {
     speakers: 'Participantes',
     words: 'Palabras',
     turns: 'Turnos',
-  },
-  nudge: {
-    noCaptionsYet: 'Esperando voz...',
   },
   tabs: {
     live: 'Transcripción en vivo',
@@ -34,22 +31,15 @@ export const es: TranslationDict = {
     subheading: 'Elige tu formato preferido para descargar la grabación.',
     copyClipboard: 'Copiar transcripción al portapapeles',
     copied: '¡Transcripción copiada al portapapeles!',
-    totalWords: 'Palabras totales',
-    totalTurns: 'Turnos de palabra',
   },
   recovery: {
     title: 'Reunión no guardada encontrada',
     description: 'Tienes una transcripción no guardada de una sesión de reunión anterior.',
-    recordedAt: 'Grabado el',
-    duration: 'Duración',
-    speakers: 'Participantes',
-    download: 'Exportar y guardar',
     discard: 'Descartar',
     discardConfirm: '¿Estás seguro de que deseas descartar esta reunión no guardada?',
-    saved: '¡Borrador guardado y eliminado!',
   },
-  popup: {
-    idleTitle: 'Listo para reuniones',
-    idleDesc: 'Abre Google Meet para grabar automáticamente subtítulos en vivo.',
+  idle: {
+    title: 'Listo para reuniones',
+    desc: 'Abre Google Meet para grabar automáticamente subtítulos en vivo.',
   },
 };

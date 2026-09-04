@@ -62,9 +62,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     'header',
     'footer',
     '.VfPpkd-Bz112c-LgbsSe',
-    'caption-recorder-root',
-    '.cr-container',
-    '.cr-widget',
   ];
 
   private static readonly EXCLUDE_SELECTOR_STRING = GoogleMeetAdapter.EXCLUDE_SELECTORS.join(', ');
