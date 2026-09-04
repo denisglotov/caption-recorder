@@ -1,8 +1,8 @@
-import type { InterimCaption } from '../core/types';
+import type { InterimCaption, KnownPlatform } from '../core/types';
 
 export interface PlatformAdapter {
   readonly name: string;
-  readonly platformId: 'google-meet' | 'zoom' | 'teams';
+  readonly platformId: KnownPlatform;
   matchesUrl(url: string): boolean;
   isCaptionsEnabled(): boolean;
   observe(
