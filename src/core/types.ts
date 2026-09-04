@@ -14,13 +14,16 @@ export interface InterimCaption {
   startTime?: number;
 }
 
+export type KnownPlatform = 'google-meet' | 'zoom' | 'teams';
+export type Platform = KnownPlatform | 'unknown';
+
 export interface MeetingSession {
   id: string;
   title: string;
   startTime: number;
   endTime?: number;
   segments: TranscriptSegment[];
-  platform: 'google-meet' | 'zoom' | 'teams' | 'unknown';
+  platform: Platform;
   savedAt?: number;
   url?: string;
 }

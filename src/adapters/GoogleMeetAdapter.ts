@@ -10,6 +10,8 @@ interface ElementTurnInfo {
 }
 
 export class GoogleMeetAdapter implements PlatformAdapter {
+  public static readonly matchPatterns: readonly string[] = ['https://meet.google.com/*'];
+
   public readonly name = 'Google Meet';
   public readonly platformId = 'google-meet';
 
@@ -95,6 +97,16 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     );
   }
 
+  public isSameMeeting(url1: string, url2: string): boolean {
+    try {
+      const u1 = new URL(url1);
+      const u2 = new URL(url2);
+      return u1.origin === u2.origin && u1.pathname === u2.pathname;
+    } catch {
+      return url1 === url2;
+    }
+  }
+
   public findCaptionButton(): HTMLElement | null {
     if (typeof document === 'undefined' || !document.querySelector) return null;
 
@@ -127,18 +139,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       if (!isJumpButton(btn)) {
         return btn;
       }
-    }
-
-    if (directCandidates.length === 0 && typeof document.querySelector === 'function') {
-      const directBtn = document.querySelector<HTMLElement>(
-        'button[aria-keyshortcuts="c"], ' +
-          'button[aria-keyshortcuts*="c"], ' +
-          'button[jsname="r8qRAd"], ' +
-          'button[data-tooltip-id*="caption" i], ' +
-          'button[data-tooltip*="caption" i], ' +
-          'button[aria-label*="caption" i]'
-      );
-      if (directBtn && !isJumpButton(directBtn)) return directBtn;
     }
 
     // 2. Scan buttons for Material Icons (Google uses closed_caption / subtitles ligature font names)
@@ -354,7 +354,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.onCaptionCallback) return;
 
     this.checkCaptionsState();
-    if (!this.isCaptionsEnabled()) {
+    if (!this.lastKnownCaptionsEnabled) {
       return;
     }
 
