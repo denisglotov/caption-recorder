@@ -140,3 +140,18 @@ npm run format
 ## 📄 License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+## 💖 Support the Project
+
+If CaptionRecorder helps you capture and export your meetings smoothly, consider sponsoring the
+project to support ongoing development and maintenance!
+
+<p align="center">
+  <a href="https://github.com/sponsors/denisglotov">
+    <img src="assets/bow.png" alt="Thank you for your support" width="120" />
+  </a>
+  <br />
+  <a href="https://github.com/sponsors/denisglotov">
+    <strong>Sponsor @denisglotov on GitHub</strong>
+  </a>
+</p>
