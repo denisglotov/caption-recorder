@@ -7,6 +7,9 @@ export default defineConfig({
   runner: {
     disabled: true,
   },
+  zip: {
+    excludeSources: ['dist/**'],
+  },
   manifest: ({ browser }) => ({
     name: '__MSG_extensionName__',
     description: '__MSG_extensionDescription__',
