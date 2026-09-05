@@ -2,12 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   localizeUI,
   updateStatus,
-  checkWindowMode,
   setupListeners,
   initPopup,
-} from '../src/entrypoints/popup/main';
+} from '../src/entrypoints/pwa-popup/main';
 
-describe('popup/main.ts Logic', () => {
+describe('pwa-popup/main.ts Logic', () => {
   let mockStorage: Record<string, unknown> = {};
   let storageChangedCallbacks: ((changes: Record<string, unknown>, area: string) => void)[] = [];
   let domElements: Record<string, HTMLElement> = {};
@@ -17,7 +16,6 @@ describe('popup/main.ts Logic', () => {
     storageChangedCallbacks = [];
     domElements = {};
 
-    // Mock DOM elements
     const createElement = (id: string, initialStyle: Record<string, string> = {}) => {
       const el = {
         id,
@@ -33,11 +31,9 @@ describe('popup/main.ts Logic', () => {
 
     createElement('status-pill');
     createElement('status-text');
-    createElement('view-pwa', { display: 'none' });
-    createElement('view-normal', { display: 'flex' });
     createElement('pwa-title');
     createElement('pwa-desc');
-    createElement('btn-open-sidepanel');
+    createElement('btn-dismiss-pwa');
 
     (globalThis as unknown as { document: unknown }).document = {
       getElementById: (id: string) => domElements[id] || null,
@@ -62,16 +58,6 @@ describe('popup/main.ts Logic', () => {
           removeListener: vi.fn(),
         },
       },
-      windows: {
-        getLastFocused: vi.fn(async () => ({ id: 101, type: 'app' })),
-        get: vi.fn(async (id: number) => ({ id, type: 'normal' })),
-      },
-      tabs: {
-        query: vi.fn(async () => [{ id: 1, windowId: 101, active: true }]),
-      },
-      sidePanel: {
-        open: vi.fn(async () => {}),
-      },
       i18n: {
         getUILanguage: () => 'en',
       },
@@ -79,12 +65,13 @@ describe('popup/main.ts Logic', () => {
   });
 
   describe('localizeUI', () => {
-    it('sets localized PWA title and description', () => {
+    it('sets localized PWA title, description, and dismiss button text', () => {
       localizeUI();
       expect(domElements['pwa-title'].textContent).toBe('Recording in Background');
       expect(domElements['pwa-desc'].textContent).toContain(
         'side panel is only available in regular browser tabs'
       );
+      expect(domElements['btn-dismiss-pwa'].textContent).toBe('Got it');
     });
   });
 
@@ -106,80 +93,16 @@ describe('popup/main.ts Logic', () => {
     });
   });
 
-  describe('checkWindowMode', () => {
-    it('shows PWA view and hides normal view when window type is app', async () => {
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 101,
-        type: 'app',
-      });
-
-      await checkWindowMode();
-
-      expect(domElements['view-pwa'].style.display).toBe('flex');
-      expect(domElements['view-normal'].style.display).toBe('none');
-    });
-
-    it('shows PWA view when window type is popup (standalone mode)', async () => {
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 102,
-        type: 'popup',
-      });
-
-      await checkWindowMode();
-
-      expect(domElements['view-pwa'].style.display).toBe('flex');
-      expect(domElements['view-normal'].style.display).toBe('none');
-    });
-
-    it('shows normal view and hides PWA view when window type is normal', async () => {
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 103,
-        type: 'normal',
-      });
-
-      await checkWindowMode();
-
-      expect(domElements['view-pwa'].style.display).toBe('none');
-      expect(domElements['view-normal'].style.display).toBe('flex');
-    });
-
-    it('falls back to tabs.query if getLastFocused fails', async () => {
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new Error('getLastFocused failed')
-      );
-      (chrome.tabs.query as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { id: 2, windowId: 202, active: true },
-      ]);
-      (chrome.windows.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 202,
-        type: 'app',
-      });
-
-      await checkWindowMode();
-
-      expect(domElements['view-pwa'].style.display).toBe('flex');
-      expect(domElements['view-normal'].style.display).toBe('none');
-    });
-  });
-
   describe('setupListeners', () => {
-    it('opens side panel and closes popup when Open Side Panel button is clicked', async () => {
-      let clickHandler: (() => Promise<void>) | null = null;
-      domElements['btn-open-sidepanel'].addEventListener = vi.fn((event, cb) => {
-        if (event === 'click') clickHandler = cb as () => Promise<void>;
-      });
-
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 303,
-        type: 'normal',
+    it('closes window when dismiss button is clicked', () => {
+      let clickHandler: (() => void) | null = null;
+      domElements['btn-dismiss-pwa'].addEventListener = vi.fn((event, cb) => {
+        if (event === 'click') clickHandler = cb as () => void;
       });
 
       setupListeners();
       expect(clickHandler).not.toBeNull();
-
-      await clickHandler!();
-
-      expect(chrome.sidePanel.open).toHaveBeenCalledWith({ windowId: 303 });
+      clickHandler!();
       expect(window.close).toHaveBeenCalled();
     });
 
@@ -209,16 +132,11 @@ describe('popup/main.ts Logic', () => {
   });
 
   describe('initPopup', () => {
-    it('initializes popup localization, listeners, status, and window mode', async () => {
-      (chrome.windows.getLastFocused as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 404,
-        type: 'app',
-      });
-
+    it('initializes popup localization, listeners, and status', async () => {
       await initPopup();
-
       expect(domElements['pwa-title'].textContent).toBe('Recording in Background');
-      expect(domElements['view-pwa'].style.display).toBe('flex');
+      expect(domElements['btn-dismiss-pwa'].textContent).toBe('Got it');
+      expect(domElements['status-pill'].className).toBe('status-pill status-idle');
     });
   });
 });

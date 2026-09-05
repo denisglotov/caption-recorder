@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { initContentScript } from '../src/entrypoints/content';
+import { initContentScript, isPwaMode } from '../src/entrypoints/content';
 import type { ContentScriptContext } from 'wxt/client';
 
 describe('content.ts Content Script Lifecycle', () => {
   let mockStorage: Record<string, unknown> = {};
   let eventListeners: Record<string, ((event?: unknown) => void)[]> = {};
+  let messageListeners: ((
+    msg: unknown,
+    sender: unknown,
+    sendResponse: (res: unknown) => void
+  ) => void)[] = [];
   let invalidatedCallbacks: (() => void)[] = [];
   let mockCtx: ContentScriptContext;
 
   beforeEach(() => {
     mockStorage = {};
     eventListeners = {};
+    messageListeners = [];
     invalidatedCallbacks = [];
 
     (globalThis as unknown as { chrome: unknown }).chrome = {
@@ -33,7 +39,9 @@ describe('content.ts Content Script Lifecycle', () => {
         id: 'test_ext_id',
         sendMessage: vi.fn(async () => ({ success: true })),
         onMessage: {
-          addListener: vi.fn(),
+          addListener: vi.fn((cb) => {
+            messageListeners.push(cb);
+          }),
           removeListener: vi.fn(),
         },
       },
@@ -48,6 +56,11 @@ describe('content.ts Content Script Lifecycle', () => {
         pathname: '/abc-defg-hij',
         origin: 'https://meet.google.com',
       },
+      matchMedia: vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
       addEventListener: vi.fn((event: string, cb: (e?: unknown) => void) => {
         eventListeners[event] = eventListeners[event] || [];
         eventListeners[event].push(cb);
@@ -94,6 +107,26 @@ describe('content.ts Content Script Lifecycle', () => {
     vi.restoreAllMocks();
   });
 
+  describe('isPwaMode', () => {
+    it('returns false when not standalone', () => {
+      expect(isPwaMode()).toBe(false);
+    });
+
+    it('returns true when display-mode: standalone matches', () => {
+      (window.matchMedia as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        matches: true,
+      });
+      expect(isPwaMode()).toBe(true);
+    });
+
+    it('returns true when navigator.standalone is true', () => {
+      (window as unknown as { navigator: { standalone: boolean } }).navigator = {
+        standalone: true,
+      };
+      expect(isPwaMode()).toBe(true);
+    });
+  });
+
   describe('initContentScript', () => {
     it('initializes a SessionRecorder when an adapter matches the URL', () => {
       const { getRecorder } = initContentScript(mockCtx);
@@ -101,6 +134,17 @@ describe('content.ts Content Script Lifecycle', () => {
 
       expect(recorder).not.toBeNull();
       recorder?.destroy();
+    });
+
+    it('notifies background with CR_SET_PWA_MODE when running as PWA', () => {
+      (window.matchMedia as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        matches: true,
+        addEventListener: vi.fn(),
+      });
+
+      const { getRecorder } = initContentScript(mockCtx);
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CR_SET_PWA_MODE' });
+      getRecorder()?.destroy();
     });
 
     it('does not initialize a SessionRecorder on an unhandled URL', () => {

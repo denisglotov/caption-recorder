@@ -3,9 +3,22 @@ import type { ContentScriptContext } from 'wxt/client';
 import { getAdapterForUrl, ADAPTER_MATCH_PATTERNS } from '../adapters';
 import { SessionRecorder } from '../core/SessionRecorder';
 
+export function isPwaMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const standaloneMedia = window.matchMedia?.('(display-mode: standalone)')?.matches;
+  const navigatorStandalone =
+    (window.navigator as unknown as { standalone?: boolean })?.standalone === true;
+  return Boolean(standaloneMedia || navigatorStandalone);
+}
+
 export function initContentScript(ctx: ContentScriptContext) {
   let recorder: SessionRecorder | null = null;
   let currentUrl = '';
+
+  // Inform background service worker if Google Meet is launched in a standalone PWA window
+  if (isPwaMode() && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    chrome.runtime.sendMessage({ type: 'CR_SET_PWA_MODE' }).catch(() => {});
+  }
 
   const syncRecorder = () => {
     const newUrl = typeof window !== 'undefined' ? window.location.href : '';

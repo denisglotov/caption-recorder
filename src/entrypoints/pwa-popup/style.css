@@ -102,7 +102,7 @@ body {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .notice-badge {
@@ -120,39 +120,22 @@ body {
   line-height: 1.45;
 }
 
-.normal-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.normal-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.btn-primary {
+.btn-dismiss {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: var(--accent);
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    transform 0.1s ease;
+  align-self: flex-end;
+  transition: background 0.15s ease;
 }
 
-.btn-primary:hover {
-  background: var(--accent-hover);
-}
-
-.btn-primary:active {
-  transform: scale(0.98);
+.btn-dismiss:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
