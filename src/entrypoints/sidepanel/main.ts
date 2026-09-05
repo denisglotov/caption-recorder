@@ -376,7 +376,119 @@ export function updateStatus(status: RecordingStatus) {
   if (btnReset) btnReset.style.display = hasSegments ? 'inline-flex' : 'none';
 }
 
-export function updateActiveDraftTurn(caption: InterimCaption | null): void {
+export function populateTurnContent(
+  turnEl: HTMLElement,
+  speaker: string,
+  text: string,
+  timeStr: string
+): void {
+  const headerEl = document.createElement('div');
+  headerEl.className = 'cr-turn-header';
+
+  const speakerEl = document.createElement('span');
+  speakerEl.className = 'cr-speaker-badge';
+  speakerEl.textContent = speaker;
+
+  const timeEl = document.createElement('span');
+  timeEl.className = 'cr-timestamp';
+  timeEl.textContent = timeStr;
+
+  headerEl.appendChild(speakerEl);
+  headerEl.appendChild(timeEl);
+
+  const textEl = document.createElement('div');
+  textEl.className = 'cr-turn-text';
+  textEl.textContent = text;
+
+  turnEl.replaceChildren(headerEl, textEl);
+}
+
+export function createTurnElement(
+  speaker: string,
+  text: string,
+  timeStr: string,
+  segmentId?: string,
+  isActive: boolean = false
+): HTMLDivElement {
+  const turnEl = document.createElement('div');
+  turnEl.className = isActive ? 'cr-turn cr-active-turn' : 'cr-turn';
+  if (segmentId) {
+    turnEl.setAttribute('data-segment-id', segmentId);
+  }
+  if (isActive) {
+    turnEl.id = 'active-draft-turn';
+  }
+
+  populateTurnContent(turnEl, speaker, text, timeStr);
+  return turnEl;
+}
+
+export function createEmptyStateElement(mode: 'recording' | 'idle'): HTMLDivElement {
+  const emptyEl = document.createElement('div');
+  emptyEl.id = 'empty-state';
+  emptyEl.className = 'empty-state';
+
+  const iconContainer = document.createElement('div');
+  iconContainer.className = 'empty-icon';
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const createSvgEl = (tag: string) =>
+    document.createElementNS ? document.createElementNS(svgNS, tag) : document.createElement(tag);
+
+  const svg = createSvgEl('svg');
+  svg.setAttribute('width', '32');
+  svg.setAttribute('height', '32');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+
+  if (mode === 'recording') {
+    iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
+    svg.setAttribute('stroke', '#ef4444');
+    svg.setAttribute('stroke-width', '2');
+
+    const path1 = createSvgEl('path');
+    path1.setAttribute('d', 'M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z');
+    const path2 = createSvgEl('path');
+    path2.setAttribute('d', 'M19 10v2a7 7 0 0 1-14 0v-2');
+    const line = createSvgEl('line');
+    line.setAttribute('x1', '12');
+    line.setAttribute('y1', '19');
+    line.setAttribute('x2', '12');
+    line.setAttribute('y2', '22');
+    svg.appendChild(path1);
+    svg.appendChild(path2);
+    svg.appendChild(line);
+  } else {
+    svg.setAttribute('stroke', '#4f46e5');
+    svg.setAttribute('stroke-width', '1.75');
+
+    const path = createSvgEl('path');
+    path.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z');
+    svg.appendChild(path);
+  }
+  iconContainer.appendChild(svg);
+
+  const titleEl = document.createElement('h3');
+  titleEl.className = 'empty-title';
+  titleEl.textContent = mode === 'recording' ? t('live.recordingTitle') : t('idle.title');
+  if (mode === 'idle') {
+    titleEl.id = 'txt-idle-title';
+  }
+
+  const descEl = document.createElement('p');
+  descEl.className = 'empty-desc';
+  descEl.textContent = mode === 'recording' ? t('live.recordingDesc') : t('idle.desc');
+  if (mode === 'idle') {
+    descEl.id = 'txt-idle-desc';
+  }
+
+  emptyEl.appendChild(iconContainer);
+  emptyEl.appendChild(titleEl);
+  emptyEl.appendChild(descEl);
+  return emptyEl;
+}
+
+export function updateActiveDraftTurn(caption: InterimCaption | null) {
   const listEl = document.getElementById('transcript-list');
   if (!listEl) return;
 
@@ -405,19 +517,11 @@ export function updateActiveDraftTurn(caption: InterimCaption | null): void {
   const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
 
   if (!activeEl) {
-    activeEl = document.createElement('div');
-    activeEl.id = 'active-draft-turn';
-    activeEl.className = 'cr-turn cr-active-turn';
+    activeEl = createTurnElement(activeDraft.speaker, activeDraft.text, timeStr, undefined, true);
     listEl.appendChild(activeEl);
+  } else {
+    populateTurnContent(activeEl, activeDraft.speaker, activeDraft.text, timeStr);
   }
-
-  activeEl.innerHTML = `
-    <div class="cr-turn-header">
-      <span class="cr-speaker-badge">${escapeHtml(activeDraft.speaker)}</span>
-      <span class="cr-timestamp">${timeStr}</span>
-    </div>
-    <div class="cr-turn-text">${escapeHtml(activeDraft.text)}</div>
-  `;
 
   if (wasNearBottom) {
     listEl.scrollTop = listEl.scrollHeight;
@@ -440,17 +544,7 @@ export function appendTurnElement(segment: TranscriptSegment): void {
   const timeStr = formatElapsed(segment.startTime - baseTime);
   const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
 
-  const turnEl = document.createElement('div');
-  turnEl.className = 'cr-turn';
-  turnEl.setAttribute('data-segment-id', segment.id);
-  turnEl.innerHTML = `
-    <div class="cr-turn-header">
-      <span class="cr-speaker-badge">${escapeHtml(segment.speaker)}</span>
-      <span class="cr-timestamp">${timeStr}</span>
-    </div>
-    <div class="cr-turn-text">${escapeHtml(segment.text)}</div>
-  `;
-
+  const turnEl = createTurnElement(segment.speaker, segment.text, timeStr, segment.id);
   listEl.appendChild(turnEl);
 
   cachedWordsCount += countWords(segment.text);
@@ -472,13 +566,7 @@ export function updateTurnElement(segment: TranscriptSegment): void {
     const baseTime = currentSession?.startTime || Date.now();
     const timeStr = formatElapsed(segment.startTime - baseTime);
 
-    turnEl.innerHTML = `
-      <div class="cr-turn-header">
-        <span class="cr-speaker-badge">${escapeHtml(segment.speaker)}</span>
-        <span class="cr-timestamp">${timeStr}</span>
-      </div>
-      <div class="cr-turn-text">${escapeHtml(segment.text)}</div>
-    `;
+    populateTurnContent(turnEl, segment.speaker, segment.text, timeStr);
 
     recalculateCachedMetrics();
     updateMetrics();
@@ -498,72 +586,30 @@ export function renderTranscript(forceScroll: boolean = false) {
   const hasActive = Boolean(activeDraft && currentStatus === 'recording');
 
   if (segments.length === 0 && !hasActive) {
-    if (currentStatus === 'recording') {
-      listEl.innerHTML = `
-        <div id="empty-state" class="empty-state">
-          <div class="empty-icon" style="background: rgba(239, 68, 68, 0.1);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          </div>
-          <h3 class="empty-title">${escapeHtml(t('live.recordingTitle'))}</h3>
-          <p class="empty-desc">
-            ${escapeHtml(t('live.recordingDesc'))}
-          </p>
-        </div>
-      `;
-    } else {
-      listEl.innerHTML = `
-        <div id="empty-state" class="empty-state">
-          <div class="empty-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.75">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-          <h3 id="txt-idle-title" class="empty-title">${escapeHtml(t('idle.title'))}</h3>
-          <p id="txt-idle-desc" class="empty-desc">${escapeHtml(t('idle.desc'))}</p>
-        </div>
-      `;
-    }
+    listEl.replaceChildren(
+      createEmptyStateElement(currentStatus === 'recording' ? 'recording' : 'idle')
+    );
     return;
   }
 
   const baseTime = currentSession?.startTime || Date.now();
+  const children: HTMLElement[] = [];
 
-  const segmentsHtml = segments
-    .map((seg) => {
-      const timeStr = formatElapsed(seg.startTime - baseTime);
-      return `
-        <div class="cr-turn" data-segment-id="${escapeHtml(seg.id)}">
-          <div class="cr-turn-header">
-            <span class="cr-speaker-badge">${escapeHtml(seg.speaker)}</span>
-            <span class="cr-timestamp">${timeStr}</span>
-          </div>
-          <div class="cr-turn-text">${escapeHtml(seg.text)}</div>
-        </div>
-      `;
-    })
-    .join('');
+  for (const seg of segments) {
+    const timeStr = formatElapsed(seg.startTime - baseTime);
+    children.push(createTurnElement(seg.speaker, seg.text, timeStr, seg.id));
+  }
 
-  let activeHtml = '';
   if (hasActive && activeDraft) {
     const timeStr = formatElapsed((activeDraft.timestamp || Date.now()) - baseTime);
-    activeHtml = `
-      <div class="cr-turn cr-active-turn" id="active-draft-turn">
-        <div class="cr-turn-header">
-          <span class="cr-speaker-badge">${escapeHtml(activeDraft.speaker)}</span>
-          <span class="cr-timestamp">${timeStr}</span>
-        </div>
-        <div class="cr-turn-text">${escapeHtml(activeDraft.text)}</div>
-      </div>
-    `;
+    children.push(
+      createTurnElement(activeDraft.speaker, activeDraft.text, timeStr, undefined, true)
+    );
   }
 
   const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
 
-  listEl.innerHTML = segmentsHtml + activeHtml;
+  listEl.replaceChildren(...children);
 
   if (forceScroll || wasNearBottom) {
     listEl.scrollTop = listEl.scrollHeight;

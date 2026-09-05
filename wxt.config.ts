@@ -3,6 +3,7 @@ import { defineConfig } from 'wxt';
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   srcDir: 'src',
+  manifestVersion: 3,
   runner: {
     disabled: true,
   },
@@ -26,7 +27,7 @@ export default defineConfig({
       browser_specific_settings: {
         gecko: {
           id: 'caption-recorder@dymka.org',
-          strict_min_version: '109.0',
+          strict_min_version: '142.0',
           data_collection_permissions: {
             required: ['none'],
           },

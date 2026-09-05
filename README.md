@@ -132,6 +132,9 @@ npm run compile
 # Lint code (ESLint)
 npm run lint
 
+# Validate Firefox extension (Mozilla AMO linter)
+npm run lint:firefox
+
 # Format code (Prettier)
 npm run format
 ```

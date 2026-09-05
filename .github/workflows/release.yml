@@ -44,6 +44,9 @@ jobs:
       - name: Package Firefox extension
         run: npm run zip:firefox
 
+      - name: Validate Firefox extension (AMO)
+        run: npm run lint:firefox
+
       - name: Prepare distribution packages and checksums
         run: |
           mkdir -p dist

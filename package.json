@@ -15,6 +15,7 @@
     "compile": "tsc --noEmit",
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
+    "lint:firefox": "addons-linter .output/firefox-mv3",
     "format": "prettier --write \"src/**/*.{ts,html,css}\" \"tests/**/*.ts\" \"*.md\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,css}\" \"tests/**/*.ts\" \"*.md\"",
     "test": "vitest run",
@@ -33,6 +34,7 @@
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10",
+    "addons-linter": "^10.10.0",
     "eslint": "^10",
     "globals": "^15.14",
     "prettier": "^3.5",

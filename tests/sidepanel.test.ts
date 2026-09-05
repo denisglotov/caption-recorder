@@ -28,80 +28,114 @@ describe('sidepanel/main.ts UI & Logic', () => {
   beforeEach(() => {
     domElements = {};
 
-    const createElement = (id: string, initialText = '') => {
+    const createMockElement = (tag = 'div', id = '', initialText = '') => {
       const children: HTMLElement[] = [];
       const el = {
+        tagName: tag.toUpperCase(),
         id,
         textContent: initialText,
         className: '',
         style: {} as Record<string, string>,
-        innerHTML: '',
         children,
         scrollHeight: 500,
         scrollTop: 0,
         clientHeight: 400,
         appendChild: vi.fn((child: HTMLElement) => {
           children.push(child);
-          domElements[child.id || `el_${Math.random()}`] = child;
+          if (child.id) domElements[child.id] = child;
           return child;
         }),
-        remove: vi.fn(),
+        replaceChildren: vi.fn((...nodes: HTMLElement[]) => {
+          children.length = 0;
+          for (const node of nodes) {
+            children.push(node);
+            if (node.id) domElements[node.id] = node;
+          }
+        }),
+        remove: vi.fn(() => {
+          if (id && domElements[id]) {
+            delete domElements[id];
+          }
+        }),
         querySelector: vi.fn((sel: string) => {
-          if (sel.includes('data-segment-id')) {
-            const match = sel.match(/data-segment-id="([^"]+)"/);
-            const segId = match ? match[1] : '';
-            return (
-              children.find(
-                (c) =>
-                  (c as unknown as { getAttribute: (k: string) => string }).getAttribute?.(
-                    'data-segment-id'
-                  ) === segId
-              ) || null
-            );
+          const findInNode = (node: HTMLElement): HTMLElement | null => {
+            if (sel.includes('data-segment-id')) {
+              const match = sel.match(/data-segment-id="([^"]+)"/);
+              const segId = match ? match[1] : '';
+              if (
+                (node as unknown as { getAttribute: (k: string) => string }).getAttribute?.(
+                  'data-segment-id'
+                ) === segId
+              ) {
+                return node;
+              }
+            }
+            if (sel.startsWith('.') && node.className?.includes(sel.slice(1))) {
+              return node;
+            }
+            if (sel.startsWith('#') && node.id === sel.slice(1)) {
+              return node;
+            }
+            for (const c of (node as unknown as { children?: HTMLElement[] }).children || []) {
+              const res = findInNode(c);
+              if (res) return res;
+            }
+            return null;
+          };
+          for (const c of children) {
+            const found = findInNode(c);
+            if (found) return found;
           }
           return null;
         }),
         querySelectorAll: vi.fn(() => children),
-        setAttribute: vi.fn(),
-        getAttribute: vi.fn(),
+        setAttribute: vi.fn((name: string, val: string) => {
+          (el as unknown as Record<string, unknown>)[name] = val;
+        }),
+        getAttribute: vi.fn((name: string) => (el as unknown as Record<string, unknown>)[name]),
         addEventListener: vi.fn(),
+        get innerHTML() {
+          const serialize = (node: HTMLElement): string => {
+            const childHtml = ((node as unknown as { children?: HTMLElement[] }).children || [])
+              .map(serialize)
+              .join('');
+            const text = node.textContent || '';
+            const idAttr = node.id ? ` id="${node.id}"` : '';
+            const classAttr = node.className ? ` class="${node.className}"` : '';
+            return `<${(node.tagName || 'div').toLowerCase()}${idAttr}${classAttr}>${text}${childHtml}</${(node.tagName || 'div').toLowerCase()}>`;
+          };
+          return children.map(serialize).join('');
+        },
+        set innerHTML(val: string) {
+          (el as unknown as Record<string, unknown>)._rawHtml = val;
+        },
       } as unknown as HTMLElement;
-      domElements[id] = el;
+
+      if (id) {
+        domElements[id] = el;
+      }
       return el;
     };
 
-    createElement('transcript-list');
-    createElement('status-pill');
-    createElement('status-text');
-    createElement('btn-new-meeting');
-    createElement('btn-reset-session');
-    createElement('val-duration');
-    createElement('val-speakers');
-    createElement('val-words');
-    createElement('val-turns');
-    createElement('sec-recovery');
-    createElement('txt-recovery-desc');
-    createElement('btn-close-sidepanel');
-    createElement('txt-sponsor-btn');
-    createElement('btn-sponsor-github');
+    createMockElement('div', 'transcript-list');
+    createMockElement('div', 'status-pill');
+    createMockElement('div', 'status-text');
+    createMockElement('button', 'btn-new-meeting');
+    createMockElement('button', 'btn-reset-session');
+    createMockElement('span', 'val-duration');
+    createMockElement('span', 'val-speakers');
+    createMockElement('span', 'val-words');
+    createMockElement('span', 'val-turns');
+    createMockElement('div', 'sec-recovery');
+    createMockElement('div', 'txt-recovery-desc');
+    createMockElement('button', 'btn-close-sidepanel');
+    createMockElement('span', 'txt-sponsor-btn');
+    createMockElement('a', 'btn-sponsor-github');
 
     (globalThis as unknown as { document: unknown }).document = {
       getElementById: (id: string) => domElements[id] || null,
-      createElement: (tag: string) => {
-        const el = {
-          tagName: tag.toUpperCase(),
-          id: '',
-          className: '',
-          innerHTML: '',
-          textContent: '',
-          setAttribute: vi.fn((name: string, val: string) => {
-            (el as unknown as Record<string, unknown>)[name] = val;
-          }),
-          getAttribute: vi.fn((name: string) => (el as unknown as Record<string, unknown>)[name]),
-          remove: vi.fn(),
-        } as unknown as HTMLElement;
-        return el;
-      },
+      createElement: (tag: string) => createMockElement(tag),
+      createElementNS: (_ns: string, tag: string) => createMockElement(tag),
     };
 
     (globalThis as unknown as Record<string, unknown>).chrome = {
