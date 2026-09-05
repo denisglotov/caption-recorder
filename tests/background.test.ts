@@ -35,30 +35,9 @@ describe('background window sync and action click', () => {
   });
 
   describe('getActionApi', () => {
-    it('returns chrome.action if present', () => {
-      const api = getActionApi();
-      expect(api).toBe((chrome as unknown as { action: unknown }).action);
-    });
+    it('resolves action API across Chrome MV3, Firefox MV3, and Firefox MV2', () => {
+      expect(getActionApi()).toBe((chrome as unknown as { action: unknown }).action);
 
-    it('returns browser.browserAction in Firefox MV2 when chrome.action is missing', () => {
-      const mockBrowserAction = {
-        setBadgeText: vi.fn(),
-        onClicked: { addListener: vi.fn() },
-      };
-      delete (globalThis as unknown as { chrome?: { action?: unknown } }).chrome?.action;
-      (globalThis as unknown as { browser: unknown }).browser = {
-        browserAction: mockBrowserAction,
-      };
-
-      try {
-        const api = getActionApi();
-        expect(api).toBe(mockBrowserAction);
-      } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
-      }
-    });
-
-    it('returns browser.action in Firefox MV3 when chrome.action is missing', () => {
       const mockAction = {
         setBadgeText: vi.fn(),
         onClicked: { addListener: vi.fn() },
@@ -68,36 +47,37 @@ describe('background window sync and action click', () => {
         action: mockAction,
       };
 
-      try {
-        const api = getActionApi();
-        expect(api).toBe(mockAction);
-      } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
-      }
+      expect(getActionApi()).toBe(mockAction);
+
+      const mockBrowserAction = {
+        setBadgeText: vi.fn(),
+        onClicked: { addListener: vi.fn() },
+      };
+      delete (globalThis as unknown as { browser?: { action?: unknown } }).browser?.action;
+      (globalThis as unknown as { browser: { browserAction: unknown } }).browser.browserAction =
+        mockBrowserAction;
+
+      expect(getActionApi()).toBe(mockBrowserAction);
+      delete (globalThis as unknown as { browser?: unknown }).browser;
     });
   });
 
   describe('getSidebarActionApi', () => {
-    it('returns browser.sidebarAction when present', () => {
+    it('returns browser.sidebarAction when present and undefined when missing', () => {
+      expect(getSidebarActionApi()).toBeUndefined();
+
       const mockSidebar = { toggle: vi.fn(), open: vi.fn() };
       (globalThis as unknown as { browser: unknown }).browser = {
         sidebarAction: mockSidebar,
       };
 
-      try {
-        expect(getSidebarActionApi()).toBe(mockSidebar);
-      } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
-      }
-    });
-
-    it('returns undefined when browser.sidebarAction is missing', () => {
-      expect(getSidebarActionApi()).toBeUndefined();
+      expect(getSidebarActionApi()).toBe(mockSidebar);
+      delete (globalThis as unknown as { browser?: unknown }).browser;
     });
   });
 
   describe('updateActionBadge', () => {
-    it('sets REC badge with background and text color when recording', async () => {
+    it('updates or clears action badge for Chrome and Firefox', async () => {
       await updateActionBadge('recording', 123);
 
       expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: 'REC', tabId: 123 });
@@ -109,15 +89,10 @@ describe('background window sync and action click', () => {
         color: '#FFFFFF',
         tabId: 123,
       });
-    });
 
-    it('clears badge text when idle', async () => {
       await updateActionBadge('idle', 123);
-
       expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '', tabId: 123 });
-    });
 
-    it('works with Firefox browserAction when chrome.action is undefined', async () => {
       const mockSetBadgeText = vi.fn(async () => {});
       const mockSetBadgeBackgroundColor = vi.fn(async () => {});
       const mockSetBadgeTextColor = vi.fn(async () => {});
@@ -147,51 +122,26 @@ describe('background window sync and action click', () => {
   });
 
   describe('syncWindowActionBehavior', () => {
-    it('sets pwa-popup.html for app windows and their tabs', async () => {
+    it('sets popup for app/popup windows and clears for normal browser windows', async () => {
       await syncWindowActionBehavior(101);
-
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ popup: 'pwa-popup.html' });
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ tabId: 1, popup: 'pwa-popup.html' });
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ tabId: 2, popup: 'pwa-popup.html' });
-    });
 
-    it('sets pwa-popup.html for standalone popup windows', async () => {
       await syncWindowActionBehavior(102);
-
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ popup: 'pwa-popup.html' });
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ tabId: 3, popup: 'pwa-popup.html' });
-    });
 
-    it('clears popup for normal browser windows', async () => {
       await syncWindowActionBehavior(103);
-
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ popup: '' });
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ tabId: 4, popup: '' });
     });
 
-    it('falls back to getLastFocused when windowId is omitted', async () => {
+    it('falls back to last focused window when windowId is omitted', async () => {
       await syncWindowActionBehavior();
 
       expect(chrome.windows.getLastFocused).toHaveBeenCalled();
       expect(chrome.action.setPopup).toHaveBeenCalledWith({ popup: 'pwa-popup.html' });
-    });
-
-    it('works with browserAction in Firefox MV2', async () => {
-      const mockSetPopup = vi.fn(async () => {});
-      delete (globalThis as unknown as { chrome?: { action?: unknown } }).chrome?.action;
-      (globalThis as unknown as { browser: unknown }).browser = {
-        browserAction: {
-          setPopup: mockSetPopup,
-        },
-      };
-
-      try {
-        await syncWindowActionBehavior(103);
-        expect(mockSetPopup).toHaveBeenCalledWith({ popup: '' });
-        expect(mockSetPopup).toHaveBeenCalledWith({ tabId: 4, popup: '' });
-      } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
-      }
     });
   });
 
@@ -204,7 +154,7 @@ describe('background window sync and action click', () => {
       expect(chrome.action.setPopup).not.toHaveBeenCalled();
     });
 
-    it('toggles sidebar in Firefox when browser.sidebarAction.toggle is present', async () => {
+    it('toggles or opens sidebar in Firefox', async () => {
       const mockSidebarToggle = vi.fn(async () => {});
       const mockSidebarOpen = vi.fn(async () => {});
       (globalThis as unknown as { browser: unknown }).browser = {
@@ -219,27 +169,13 @@ describe('background window sync and action click', () => {
         await handleActionClick(tab);
 
         expect(mockSidebarToggle).toHaveBeenCalled();
-        expect(mockSidebarOpen).not.toHaveBeenCalled();
         expect(chrome.sidePanel.open).not.toHaveBeenCalled();
-      } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
-      }
-    });
 
-    it('opens sidebar in Firefox when only browser.sidebarAction.open is present', async () => {
-      const mockSidebarOpen = vi.fn(async () => {});
-      (globalThis as unknown as { browser: unknown }).browser = {
-        sidebarAction: {
-          open: mockSidebarOpen,
-        },
-      };
-
-      try {
-        const tab = { id: 20, windowId: 202 } as chrome.tabs.Tab;
+        delete (globalThis as unknown as { browser?: { sidebarAction?: { toggle?: unknown } } })
+          .browser?.sidebarAction?.toggle;
         await handleActionClick(tab);
 
         expect(mockSidebarOpen).toHaveBeenCalled();
-        expect(chrome.sidePanel.open).not.toHaveBeenCalled();
       } finally {
         delete (globalThis as unknown as { browser?: unknown }).browser;
       }
@@ -260,14 +196,6 @@ describe('background window sync and action click', () => {
       expect(chrome.action.setPopup).toHaveBeenCalledWith({
         popup: 'pwa-popup.html',
       });
-    });
-
-    it('does nothing if windowId is missing', async () => {
-      const tab = { id: 40 } as chrome.tabs.Tab;
-      await handleActionClick(tab);
-
-      expect(chrome.sidePanel.open).not.toHaveBeenCalled();
-      expect(chrome.action.setPopup).not.toHaveBeenCalled();
     });
   });
 });

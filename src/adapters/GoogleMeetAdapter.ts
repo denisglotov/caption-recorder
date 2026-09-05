@@ -93,7 +93,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   public matchesUrl(url: string): boolean {
     return (
       /^https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i.test(url) ||
-      /^https?:\/\/meet\.google\.com\/(_meet|lookup)\//i.test(url)
+      /^https?:\/\/meet\.google\.com\/(_meet|lookup|call)\//i.test(url)
     );
   }
 
@@ -247,7 +247,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
         subtree: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ['aria-pressed', 'aria-label', 'class', 'style'],
+        attributeFilter: ['aria-pressed', 'aria-label'],
       });
 
       if (typeof document.addEventListener === 'function') {
@@ -440,6 +440,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     const trackKey = this.getCaptionTrackKey(textEl);
 
     const existingTurn = this.elementTurns.get(trackKey);
+    const now = Date.now();
 
     // Case 1: The turn for this element was already emitted as a segment.
     if (existingTurn?.emitted) {
@@ -448,26 +449,34 @@ export class GoogleMeetAdapter implements PlatformAdapter {
         return;
       }
 
-      // Speech recognition revised/translated an earlier phrase in the DOM: update in-place!
-      existingTurn.text = text;
-      existingTurn.speaker = speaker;
-      this.lastEmittedSpeaker = speaker;
-      this.lastEmittedText = text;
+      // Speech recognition revised/translated an earlier phrase in the DOM: update in-place
+      // only if it is the same speaker and within a recent revision window (within 15s).
+      const isRecentSameSpeakerRevision =
+        existingTurn.speaker === speaker && now - existingTurn.startTime < 15000;
 
-      const now = Date.now();
-      this.onCaptionCallback?.({
-        id: existingTurn.id,
-        speaker: speaker.trim() || 'Speaker',
-        text,
-        startTime: existingTurn.startTime,
-        timestamp: now,
-      });
-      return;
+      if (isRecentSameSpeakerRevision) {
+        existingTurn.text = text;
+        existingTurn.speaker = speaker;
+        this.lastEmittedSpeaker = speaker;
+        this.lastEmittedText = text;
+
+        this.onCaptionCallback?.({
+          id: existingTurn.id,
+          speaker: speaker.trim() || 'Speaker',
+          text,
+          startTime: existingTurn.startTime,
+          timestamp: now,
+        });
+        return;
+      }
+
+      // Container reused for a different speaker or a new utterance after a gap:
+      // discard the old emitted turn mapping so a new turn is created.
+      this.elementTurns.delete(trackKey);
     }
 
     // Case 2: Skip lingering caption that matches the last emitted text/speaker if not tracked
     if (speaker === this.lastEmittedSpeaker && text === this.lastEmittedText) {
-      const now = Date.now();
       const id = this.generateTurnId(now);
       this.elementTurns.set(trackKey, {
         id,
@@ -486,8 +495,9 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       this.pendingCaption.speaker === speaker
     ) {
       this.pendingCaption.text = text;
-      if (existingTurn) {
-        existingTurn.text = text;
+      const activeTurn = this.elementTurns.get(trackKey);
+      if (activeTurn) {
+        activeTurn.text = text;
       }
       this.onActiveCaptionCallback?.({
         id: this.pendingCaption.id,
@@ -502,13 +512,13 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     // Case 4: Chunk element or author switched: finalize previous chunk immediately
     this.flush();
 
-    const now = Date.now();
-    const turnId = existingTurn?.id || this.generateTurnId(now);
+    const activeTurn = this.elementTurns.get(trackKey);
+    const turnId = activeTurn && !activeTurn.emitted ? activeTurn.id : this.generateTurnId(now);
     const turnInfo: ElementTurnInfo = {
       id: turnId,
       speaker,
       text,
-      startTime: existingTurn?.startTime || now,
+      startTime: activeTurn && !activeTurn.emitted ? activeTurn.startTime : now,
       emitted: false,
     };
     this.elementTurns.set(trackKey, turnInfo);

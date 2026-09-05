@@ -14,7 +14,9 @@ export const ADAPTER_MATCH_PATTERNS = [...GoogleMeetAdapter.matchPatterns];
  * Detect the appropriate platform adapter for the current URL.
  * Returns a fresh adapter instance to avoid shared mutable state.
  */
-export function getAdapterForUrl(url: string = window.location.href): PlatformAdapter | null {
+export function getAdapterForUrl(
+  url: string = typeof window !== 'undefined' ? window.location.href : ''
+): PlatformAdapter | null {
   for (const AdapterClass of adapterClasses) {
     const adapter = new AdapterClass();
     if (adapter.matchesUrl(url)) {

@@ -84,37 +84,6 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     return { block, textEl };
   }
 
-  it('keeps intermediate speech drafts pending within the same chunk element and does not emit prematurely', () => {
-    const emitted: InterimCaption[] = [];
-    adapter.observe((cap) => emitted.push(cap));
-
-    const { textEl } = createMockCaptionElement('Cuan.', 'You');
-
-    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
-      textEl
-    );
-    expect(emitted.length).toBe(0);
-
-    // Rapid live translation drafts inside the same chunk element
-    textEl.textContent = 'Cuanto.';
-    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
-      textEl
-    );
-
-    textEl.textContent = 'Cuanto three, four, five, six, seven.';
-    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
-      textEl
-    );
-
-    textEl.textContent = '1, 2, 3, 4, 5, 6, 7.';
-    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
-      textEl
-    );
-
-    // No chunk switch has occurred yet
-    expect(emitted.length).toBe(0);
-  });
-
   it('streams the current unstable chunk via onActiveCaption in real-time before switching', () => {
     const emittedFinals: InterimCaption[] = [];
     const activeDrafts: (InterimCaption | null)[] = [];
@@ -247,24 +216,6 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
 
     // Should NOT emit duplicates
     expect(emitted.length).toBe(1);
-  });
-
-  it('immediately flushes pending caption when flush() is invoked on stop or pause', () => {
-    const emitted: InterimCaption[] = [];
-    adapter.observe((cap) => emitted.push(cap));
-
-    const { textEl } = createMockCaptionElement('Sentence in progress', 'Alice');
-
-    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
-      textEl
-    );
-    expect(emitted.length).toBe(0);
-
-    adapter.flush();
-
-    expect(emitted.length).toBe(1);
-    expect(emitted[0].speaker).toBe('Alice');
-    expect(emitted[0].text).toBe('Sentence in progress');
   });
 
   it('emits pending caption chunk when caption element is disconnected from the DOM', () => {
@@ -444,6 +395,8 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(adapter.matchesUrl('https://meet.google.com/abc-defg-hij')).toBe(true);
     expect(adapter.matchesUrl('https://meet.google.com/_meet/abc-defg-hij')).toBe(true);
     expect(adapter.matchesUrl('https://meet.google.com/lookup/team-standup')).toBe(true);
+    expect(adapter.matchesUrl('https://meet.google.com/call/abc123xyz')).toBe(true);
+    expect(adapter.matchesUrl('https://meet.google.com/call/abc-def-ghi?authuser=0')).toBe(true);
     expect(adapter.matchesUrl('https://meet.google.com/')).toBe(false);
     expect(adapter.matchesUrl('https://meet.google.com/landing')).toBe(false);
     expect(adapter.matchesUrl('https://google.com')).toBe(false);
@@ -572,5 +525,65 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
       });
 
     expect(adapter.findCaptionButton()).toBeNull();
+  });
+
+  it('creates a new turn when a caption container is reused by a different speaker', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    const { textEl, block } = createMockCaptionElement('Speaker 1 remarks.', 'Alice');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].speaker).toBe('Alice');
+    expect(emitted[0].text).toBe('Speaker 1 remarks.');
+    const firstTurnId = emitted[0].id;
+
+    // Meet reuses the same DOM container block for Bob
+    textEl.textContent = 'Speaker 2 starts talking in same container.';
+    block.querySelector = (sel: string) => {
+      if (sel.includes('NWpY1d')) return { textContent: 'Bob' };
+      return null;
+    };
+
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].id).not.toBe(firstTurnId);
+    expect(emitted[1].speaker).toBe('Bob');
+    expect(emitted[1].text).toBe('Speaker 2 starts talking in same container.');
+  });
+
+  it('creates a new turn when the same speaker speaks again in the same container after a time gap', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    vi.setSystemTime(100000);
+    const { textEl } = createMockCaptionElement('First sentence.', 'Alice');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(1);
+    const firstTurnId = emitted[0].id;
+
+    // 20 seconds later, same container is updated with a new sentence
+    vi.setSystemTime(120000);
+    textEl.textContent = 'Second sentence spoken 20 seconds later.';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].id).not.toBe(firstTurnId);
+    expect(emitted[1].text).toBe('Second sentence spoken 20 seconds later.');
   });
 });

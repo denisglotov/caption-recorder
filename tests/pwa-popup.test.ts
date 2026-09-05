@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  localizeUI,
-  updateStatus,
-  setupListeners,
-  initPopup,
-} from '../src/entrypoints/pwa-popup/main';
+import { updateStatus, setupListeners, initPopup } from '../src/entrypoints/pwa-popup/main';
 
 describe('pwa-popup/main.ts Logic', () => {
   let mockStorage: Record<string, unknown> = {};
@@ -64,79 +59,51 @@ describe('pwa-popup/main.ts Logic', () => {
     };
   });
 
-  describe('localizeUI', () => {
-    it('sets localized PWA title, description, and dismiss button text', () => {
-      localizeUI();
-      expect(domElements['pwa-title'].textContent).toBe('Recording in Background');
-      expect(domElements['pwa-desc'].textContent).toContain(
-        'side panel is only available in regular browser tabs'
-      );
-      expect(domElements['btn-dismiss-pwa'].textContent).toBe('Got it');
-    });
+  it('initializes popup with localized UI and reflects current recording status', async () => {
+    await initPopup();
+    expect(domElements['pwa-title'].textContent).toBe('Recording in Background');
+    expect(domElements['pwa-desc'].textContent).toContain(
+      'side panel is only available in regular browser tabs'
+    );
+    expect(domElements['btn-dismiss-pwa'].textContent).toBe('Got it');
+    expect(domElements['status-pill'].className).toBe('status-pill status-idle');
+    expect(domElements['status-text'].textContent).toBe('Idle');
+
+    mockStorage['caption_recorder_recording_state'] = {
+      status: 'recording',
+      tabId: 1,
+    };
+    await updateStatus();
+    expect(domElements['status-pill'].className).toBe('status-pill status-recording');
+    expect(domElements['status-text'].textContent).toBe('Recording');
   });
 
-  describe('updateStatus', () => {
-    it('renders idle status when no recording state exists', async () => {
-      await updateStatus();
-      expect(domElements['status-pill'].className).toBe('status-pill status-idle');
-      expect(domElements['status-text'].textContent).toBe('Idle');
+  it('handles dismiss click and syncs status when storage changes', async () => {
+    let clickHandler: (() => void) | null = null;
+    domElements['btn-dismiss-pwa'].addEventListener = vi.fn((event, cb) => {
+      if (event === 'click') clickHandler = cb as () => void;
     });
 
-    it('renders recording status when status is recording', async () => {
-      mockStorage['caption_recorder_recording_state'] = {
-        status: 'recording',
-        tabId: 1,
-      };
-      await updateStatus();
-      expect(domElements['status-pill'].className).toBe('status-pill status-recording');
-      expect(domElements['status-text'].textContent).toBe('Recording');
-    });
-  });
+    setupListeners();
+    expect(clickHandler).not.toBeNull();
+    clickHandler!();
+    expect(window.close).toHaveBeenCalled();
 
-  describe('setupListeners', () => {
-    it('closes window when dismiss button is clicked', () => {
-      let clickHandler: (() => void) | null = null;
-      domElements['btn-dismiss-pwa'].addEventListener = vi.fn((event, cb) => {
-        if (event === 'click') clickHandler = cb as () => void;
-      });
-
-      setupListeners();
-      expect(clickHandler).not.toBeNull();
-      clickHandler!();
-      expect(window.close).toHaveBeenCalled();
-    });
-
-    it('updates status when storage changes', async () => {
-      setupListeners();
-      expect(storageChangedCallbacks.length).toBeGreaterThan(0);
-
-      mockStorage['caption_recorder_recording_state'] = {
-        status: 'recording',
-        tabId: 1,
-      };
-
-      for (const cb of storageChangedCallbacks) {
-        cb(
-          {
-            caption_recorder_recording_state: {
-              newValue: mockStorage['caption_recorder_recording_state'],
-            },
+    mockStorage['caption_recorder_recording_state'] = {
+      status: 'recording',
+      tabId: 1,
+    };
+    for (const cb of storageChangedCallbacks) {
+      cb(
+        {
+          caption_recorder_recording_state: {
+            newValue: mockStorage['caption_recorder_recording_state'],
           },
-          'local'
-        );
-      }
-
-      await new Promise((r) => setTimeout(r, 10));
-      expect(domElements['status-pill'].className).toBe('status-pill status-recording');
-    });
-  });
-
-  describe('initPopup', () => {
-    it('initializes popup localization, listeners, and status', async () => {
-      await initPopup();
-      expect(domElements['pwa-title'].textContent).toBe('Recording in Background');
-      expect(domElements['btn-dismiss-pwa'].textContent).toBe('Got it');
-      expect(domElements['status-pill'].className).toBe('status-pill status-idle');
-    });
+        },
+        'local'
+      );
+    }
+    await new Promise((r) => setTimeout(r, 10));
+    expect(domElements['status-pill'].className).toBe('status-pill status-recording');
   });
 });

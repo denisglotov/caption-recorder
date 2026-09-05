@@ -108,18 +108,14 @@ describe('content.ts Content Script Lifecycle', () => {
   });
 
   describe('isPwaMode', () => {
-    it('returns false when not standalone', () => {
+    it('detects standard, display-mode standalone, and navigator.standalone PWA environments', () => {
       expect(isPwaMode()).toBe(false);
-    });
 
-    it('returns true when display-mode: standalone matches', () => {
       (window.matchMedia as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
         matches: true,
       });
       expect(isPwaMode()).toBe(true);
-    });
 
-    it('returns true when navigator.standalone is true', () => {
       (window as unknown as { navigator: { standalone: boolean } }).navigator = {
         standalone: true,
       };
@@ -128,12 +124,16 @@ describe('content.ts Content Script Lifecycle', () => {
   });
 
   describe('initContentScript', () => {
-    it('initializes a SessionRecorder when an adapter matches the URL', () => {
-      const { getRecorder } = initContentScript(mockCtx);
-      const recorder = getRecorder();
-
+    it('initializes a SessionRecorder on matching URLs and skips unhandled URLs', () => {
+      const { getRecorder: getMatchingRecorder } = initContentScript(mockCtx);
+      const recorder = getMatchingRecorder();
       expect(recorder).not.toBeNull();
       recorder?.destroy();
+
+      (window as unknown as { location: { href: string } }).location.href =
+        'https://meet.google.com/';
+      const { getRecorder: getUnhandledRecorder } = initContentScript(mockCtx);
+      expect(getUnhandledRecorder()).toBeNull();
     });
 
     it('notifies background with CR_SET_PWA_MODE when running as PWA', () => {
@@ -145,14 +145,6 @@ describe('content.ts Content Script Lifecycle', () => {
       const { getRecorder } = initContentScript(mockCtx);
       expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CR_SET_PWA_MODE' });
       getRecorder()?.destroy();
-    });
-
-    it('does not initialize a SessionRecorder on an unhandled URL', () => {
-      (window as unknown as { location: { href: string } }).location.href =
-        'https://meet.google.com/';
-      const { getRecorder } = initContentScript(mockCtx);
-
-      expect(getRecorder()).toBeNull();
     });
 
     it('destroys the recorder when navigating to an unhandled URL', () => {

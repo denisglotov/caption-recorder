@@ -133,6 +133,33 @@ describe('SessionRecorder Headless Coordinator', () => {
     recorder.destroy();
   });
 
+  it('does not clobber saved draft in storage when captions are already active during startup', async () => {
+    // Session without endTime (active meeting reload)
+    const draft: MeetingSession = {
+      ...createSavedMeetingDraft(),
+      endTime: undefined,
+    };
+    await DraftStorageService.saveDraftImmediate(draft);
+
+    mockAdapter.isCaptionsEnabled = () => true;
+
+    const recorder = new SessionRecorder(mockAdapter);
+
+    // Before restoration finishes, storage should still hold the draft
+    const inFlightStorage = mockStorage['caption_recorder_unsaved_draft'] as MeetingSession;
+    expect(inFlightStorage).toBeDefined();
+    expect(inFlightStorage.segments.length).toBe(2);
+
+    await recorder.restorePromise;
+
+    // After restoration and caption state check, storage retains restored segments
+    const finalStorage = (await DraftStorageService.getUnsavedDraft(true)) as MeetingSession;
+    expect(finalStorage).toBeDefined();
+    expect(finalStorage.segments.length).toBe(2);
+    expect(recorder.getStatus()).toBe('recording');
+    recorder.destroy();
+  });
+
   it('flushes pending captions and saves draft immediately on window beforeunload or pagehide', async () => {
     const recorder = new SessionRecorder(mockAdapter);
     await recorder.restorePromise;

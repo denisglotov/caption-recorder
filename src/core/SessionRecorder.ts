@@ -14,6 +14,7 @@ export class SessionRecorder {
   private status: RecordingStatus = 'idle';
   private hasRecorded: boolean = false;
   private activeDraft: InterimCaption | null = null;
+  private isRestoring: boolean = true;
   public restorePromise: Promise<void> | null = null;
 
   private unloadHandler: () => void;
@@ -52,7 +53,6 @@ export class SessionRecorder {
     this.attachStorageListener();
     this.attachMessageListener();
     this.startObserving();
-    this.checkCaptionsState();
   }
 
   public getSession(): MeetingSession {
@@ -136,6 +136,13 @@ export class SessionRecorder {
   }
 
   public handleCaptionsStateChange(enabled: boolean): void {
+    if (this.isRestoring) {
+      this.restorePromise?.then(() => {
+        this.handleCaptionsStateChange(enabled);
+      });
+      return;
+    }
+
     if (enabled) {
       this.resumeRecording();
     } else {
@@ -144,6 +151,13 @@ export class SessionRecorder {
   }
 
   private resumeRecording(): void {
+    if (this.isRestoring) {
+      this.restorePromise?.then(() => {
+        this.resumeRecording();
+      });
+      return;
+    }
+
     if (this.status === 'recording') {
       return;
     }
@@ -161,6 +175,13 @@ export class SessionRecorder {
   }
 
   private pauseRecording(): void {
+    if (this.isRestoring) {
+      this.restorePromise?.then(() => {
+        this.pauseRecording();
+      });
+      return;
+    }
+
     if (this.status === 'paused') {
       return;
     }
@@ -191,39 +212,39 @@ export class SessionRecorder {
   private async restoreDraftSession(): Promise<void> {
     try {
       const draft = await DraftStorageService.getUnsavedDraft();
-      if (!draft || !Array.isArray(draft.segments) || draft.segments.length === 0) {
-        return;
-      }
+      if (draft && Array.isArray(draft.segments) && draft.segments.length > 0) {
+        console.info(
+          `[SessionRecorder] Restoring saved draft session (${draft.segments.length} segments, ${draft.id})`
+        );
 
-      console.info(
-        `[SessionRecorder] Restoring saved draft session (${draft.segments.length} segments, ${draft.id})`
-      );
+        this.session = {
+          id: draft.id || this.session.id,
+          title:
+            draft.title ||
+            (typeof document !== 'undefined'
+              ? document.title || this.adapter.name
+              : this.adapter.name),
+          startTime: draft.startTime || this.session.startTime,
+          endTime: draft.endTime,
+          segments: [...draft.segments],
+          platform: draft.platform || this.adapter.platformId,
+          savedAt: draft.savedAt,
+          url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
+        };
 
-      this.session = {
-        id: draft.id || this.session.id,
-        title:
-          draft.title ||
-          (typeof document !== 'undefined'
-            ? document.title || this.adapter.name
-            : this.adapter.name),
-        startTime: draft.startTime || this.session.startTime,
-        endTime: draft.endTime,
-        segments: [...draft.segments],
-        platform: draft.platform || this.adapter.platformId,
-        savedAt: draft.savedAt,
-        url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
-      };
-
-      this.hasRecorded = draft.segments.length > 0 || Boolean(draft.startTime);
-
-      if (draft.endTime) {
-        this.status = 'idle';
-        this.sendMessage({ type: 'CR_STATUS_CHANGE', status: 'idle' });
-      } else {
-        this.checkCaptionsState();
+        this.hasRecorded = draft.segments.length > 0 || Boolean(draft.startTime);
       }
     } catch (err) {
       console.warn('[SessionRecorder] Failed to restore draft session', err);
+    } finally {
+      this.isRestoring = false;
+    }
+
+    if (this.session.endTime) {
+      this.status = 'idle';
+      this.sendMessage({ type: 'CR_STATUS_CHANGE', status: 'idle' });
+    } else {
+      this.checkCaptionsState();
     }
   }
 

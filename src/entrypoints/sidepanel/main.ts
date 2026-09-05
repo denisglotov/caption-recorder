@@ -9,17 +9,43 @@ import type {
 } from '../../core/types';
 import { t } from '../../i18n';
 
-let currentSession: MeetingSession | null = null;
-let currentStatus: RecordingStatus = 'idle';
-let activeDraft: InterimCaption | null = null;
+export let currentSession: MeetingSession | null = null;
+export let currentStatus: RecordingStatus = 'idle';
+export let activeDraft: InterimCaption | null = null;
 let durationInterval: ReturnType<typeof setInterval> | null = null;
+
+let cachedWordsCount = 0;
+const cachedSpeakersSet = new Set<string>();
+
+export function recalculateCachedMetrics(): void {
+  cachedWordsCount = 0;
+  cachedSpeakersSet.clear();
+  const segments = currentSession?.segments || [];
+  for (const seg of segments) {
+    cachedWordsCount += countWords(seg.text);
+    if (seg.speaker) cachedSpeakersSet.add(seg.speaker);
+  }
+}
+
+export function setCurrentSession(session: MeetingSession | null): void {
+  currentSession = session;
+  recalculateCachedMetrics();
+}
+
+export function setCurrentStatus(status: RecordingStatus): void {
+  currentStatus = status;
+}
+
+export function setActiveDraft(draft: InterimCaption | null): void {
+  activeDraft = draft;
+}
 
 const segmenter: Intl.Segmenter | null =
   typeof Intl !== 'undefined' && 'Segmenter' in Intl
     ? new Intl.Segmenter(undefined, { granularity: 'word' })
     : null;
 
-function countWords(text?: string): number {
+export function countWords(text?: string): number {
   if (!text) return 0;
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -33,7 +59,7 @@ function countWords(text?: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -41,7 +67,7 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function formatElapsed(timeDiffMs: number): string {
+export function formatElapsed(timeDiffMs: number): string {
   const totalSec = Math.max(0, Math.floor(timeDiffMs / 1000));
   const hours = Math.floor(totalSec / 3600);
   const minutes = Math.floor((totalSec % 3600) / 60);
@@ -54,14 +80,14 @@ function formatElapsed(timeDiffMs: number): string {
   return `${pad(minutes)}:${pad(seconds)}`;
 }
 
-function formatDuration(timeDiffMs: number): string {
+export function formatDuration(timeDiffMs: number): string {
   const totalSec = Math.max(0, Math.floor(timeDiffMs / 1000));
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}m ${s}s`;
 }
 
-async function initSidePanel() {
+export async function initSidePanel() {
   localizeUI();
   setupNavigation();
   setupExportButtons();
@@ -74,11 +100,23 @@ async function initSidePanel() {
   startDurationTimer();
 }
 
-function setupCloseButton() {
-  document.getElementById('btn-close-sidepanel')?.addEventListener('click', () => {
-    const globalObj = globalThis as unknown as {
-      browser?: { sidebarAction?: { close: () => Promise<void> } };
-    };
+export function setupCloseButton() {
+  const btnClose = document.getElementById('btn-close-sidepanel');
+  if (!btnClose) return;
+
+  const globalObj = globalThis as unknown as {
+    browser?: { sidebarAction?: { close?: () => Promise<void> } };
+  };
+
+  // In Chrome, window.close() does not close side panels; Chrome provides native close icon.
+  // Hide custom close button on Chrome side panels while keeping it in Firefox sidebar.
+  const isFirefox = Boolean(globalObj.browser?.sidebarAction);
+  if (!isFirefox && typeof chrome !== 'undefined' && chrome.sidePanel) {
+    btnClose.style.display = 'none';
+    return;
+  }
+
+  btnClose.addEventListener('click', () => {
     if (globalObj.browser?.sidebarAction?.close) {
       globalObj.browser.sidebarAction.close().catch(() => {});
     }
@@ -298,7 +336,7 @@ async function loadInitialSession() {
   updateMetrics();
 }
 
-function updateStatus(status: RecordingStatus) {
+export function updateStatus(status: RecordingStatus) {
   currentStatus = status;
   const pill = document.getElementById('status-pill');
   const label = document.getElementById('status-text');
@@ -320,9 +358,123 @@ function updateStatus(status: RecordingStatus) {
   if (btnReset) btnReset.style.display = hasSegments ? 'inline-flex' : 'none';
 }
 
-function renderTranscript(forceScroll: boolean = false) {
+export function updateActiveDraftTurn(caption: InterimCaption | null): void {
   const listEl = document.getElementById('transcript-list');
   if (!listEl) return;
+
+  activeDraft = caption;
+  const hasActive = Boolean(activeDraft && currentStatus === 'recording');
+
+  if ((!currentSession || currentSession.segments.length === 0) && !hasActive) {
+    renderTranscript();
+    updateMetrics();
+    return;
+  }
+
+  const emptyState = document.getElementById('empty-state');
+  if (emptyState) emptyState.remove();
+
+  let activeEl = document.getElementById('active-draft-turn');
+
+  if (!hasActive || !activeDraft) {
+    if (activeEl) activeEl.remove();
+    updateMetrics();
+    return;
+  }
+
+  const baseTime = currentSession?.startTime || Date.now();
+  const timeStr = formatElapsed((activeDraft.timestamp || Date.now()) - baseTime);
+  const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+
+  if (!activeEl) {
+    activeEl = document.createElement('div');
+    activeEl.id = 'active-draft-turn';
+    activeEl.className = 'cr-turn cr-active-turn';
+    listEl.appendChild(activeEl);
+  }
+
+  activeEl.innerHTML = `
+    <div class="cr-turn-header">
+      <span class="cr-speaker-badge">${escapeHtml(activeDraft.speaker)}</span>
+      <span class="cr-timestamp">${timeStr}</span>
+    </div>
+    <div class="cr-turn-text">${escapeHtml(activeDraft.text)}</div>
+  `;
+
+  if (wasNearBottom) {
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  updateMetrics();
+}
+
+export function appendTurnElement(segment: TranscriptSegment): void {
+  const listEl = document.getElementById('transcript-list');
+  if (!listEl) return;
+
+  const emptyState = document.getElementById('empty-state');
+  if (emptyState) emptyState.remove();
+
+  const activeEl = document.getElementById('active-draft-turn');
+  if (activeEl) activeEl.remove();
+
+  const baseTime = currentSession?.startTime || Date.now();
+  const timeStr = formatElapsed(segment.startTime - baseTime);
+  const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+
+  const turnEl = document.createElement('div');
+  turnEl.className = 'cr-turn';
+  turnEl.setAttribute('data-segment-id', segment.id);
+  turnEl.innerHTML = `
+    <div class="cr-turn-header">
+      <span class="cr-speaker-badge">${escapeHtml(segment.speaker)}</span>
+      <span class="cr-timestamp">${timeStr}</span>
+    </div>
+    <div class="cr-turn-text">${escapeHtml(segment.text)}</div>
+  `;
+
+  listEl.appendChild(turnEl);
+
+  cachedWordsCount += countWords(segment.text);
+  if (segment.speaker) cachedSpeakersSet.add(segment.speaker);
+
+  if (wasNearBottom) {
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  updateMetrics();
+}
+
+export function updateTurnElement(segment: TranscriptSegment): void {
+  const listEl = document.getElementById('transcript-list');
+  if (!listEl) return;
+
+  const turnEl = listEl.querySelector<HTMLElement>(`[data-segment-id="${segment.id}"]`);
+  if (turnEl) {
+    const baseTime = currentSession?.startTime || Date.now();
+    const timeStr = formatElapsed(segment.startTime - baseTime);
+
+    turnEl.innerHTML = `
+      <div class="cr-turn-header">
+        <span class="cr-speaker-badge">${escapeHtml(segment.speaker)}</span>
+        <span class="cr-timestamp">${timeStr}</span>
+      </div>
+      <div class="cr-turn-text">${escapeHtml(segment.text)}</div>
+    `;
+
+    recalculateCachedMetrics();
+    updateMetrics();
+  } else {
+    renderTranscript();
+    updateMetrics();
+  }
+}
+
+export function renderTranscript(forceScroll: boolean = false) {
+  const listEl = document.getElementById('transcript-list');
+  if (!listEl) return;
+
+  recalculateCachedMetrics();
 
   const segments = currentSession?.segments || [];
   const hasActive = Boolean(activeDraft && currentStatus === 'recording');
@@ -366,7 +518,7 @@ function renderTranscript(forceScroll: boolean = false) {
     .map((seg) => {
       const timeStr = formatElapsed(seg.startTime - baseTime);
       return `
-        <div class="cr-turn">
+        <div class="cr-turn" data-segment-id="${escapeHtml(seg.id)}">
           <div class="cr-turn-header">
             <span class="cr-speaker-badge">${escapeHtml(seg.speaker)}</span>
             <span class="cr-timestamp">${timeStr}</span>
@@ -400,7 +552,7 @@ function renderTranscript(forceScroll: boolean = false) {
   }
 }
 
-function updateMetrics() {
+export function updateMetrics() {
   const segments = currentSession?.segments || [];
   const baseTime = currentSession?.startTime || Date.now();
   const endTime = currentSession?.endTime || Date.now();
@@ -408,13 +560,16 @@ function updateMetrics() {
   const durationMs = currentSession ? Math.max(0, endTime - baseTime) : 0;
   const durationStr = formatDuration(durationMs);
 
-  const speakers = Array.from(new Set(segments.map((s) => s.speaker))).length;
-  let wordCount = segments.reduce((acc, seg) => acc + countWords(seg.text), 0);
+  let speakers = cachedSpeakersSet.size;
+  let wordCount = cachedWordsCount;
   let turnsCount = segments.length;
 
   if (activeDraft && currentStatus === 'recording') {
     wordCount += countWords(activeDraft.text);
     turnsCount += 1;
+    if (activeDraft.speaker && !cachedSpeakersSet.has(activeDraft.speaker)) {
+      speakers += 1;
+    }
   }
 
   const valDur = document.getElementById('val-duration');
@@ -446,7 +601,7 @@ function startDurationTimer() {
   }, 1000);
 }
 
-function showRecoveryBanner(draft: MeetingSession) {
+export function showRecoveryBanner(draft: MeetingSession) {
   const banner = document.getElementById('sec-recovery');
   const desc = document.getElementById('txt-recovery-desc');
   if (!banner) return;
@@ -464,7 +619,7 @@ function showRecoveryBanner(draft: MeetingSession) {
   }
 }
 
-function hideRecoveryBanner() {
+export function hideRecoveryBanner() {
   const banner = document.getElementById('sec-recovery');
   if (banner) banner.style.display = 'none';
 }
@@ -500,8 +655,7 @@ function listenToExtensionMessages() {
       }
       currentSession.segments.push(msg.segment);
       activeDraft = null;
-      renderTranscript();
-      updateMetrics();
+      appendTurnElement(msg.segment);
       hideRecoveryBanner();
     } else if (msg.type === 'CR_UPDATE_TURN' && msg.segment) {
       if (!currentSession) {
@@ -512,6 +666,8 @@ function listenToExtensionMessages() {
           segments: [msg.segment],
           platform: 'google-meet',
         };
+        renderTranscript();
+        updateMetrics();
       } else {
         const idx = currentSession.segments.findIndex((s) => s.id === msg.segment!.id);
         if (idx >= 0) {
@@ -519,13 +675,10 @@ function listenToExtensionMessages() {
         } else {
           currentSession.segments.push(msg.segment);
         }
+        updateTurnElement(msg.segment);
       }
-      renderTranscript();
-      updateMetrics();
     } else if (msg.type === 'CR_ACTIVE_CAPTION') {
-      activeDraft = msg.caption || null;
-      renderTranscript();
-      updateMetrics();
+      updateActiveDraftTurn(msg.caption || null);
     }
   });
 }
@@ -566,4 +719,6 @@ function listenToStorageChanges() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', initSidePanel);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', initSidePanel);
+}
