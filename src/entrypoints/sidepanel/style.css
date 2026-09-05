@@ -509,6 +509,12 @@ body {
   margin-top: 6px;
 }
 
+.export-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -522,6 +528,18 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   border: none;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.btn-sponsor {
+  gap: 7px;
+  color: #e2e8f0;
+}
+
+.btn-sponsor:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .btn-primary {

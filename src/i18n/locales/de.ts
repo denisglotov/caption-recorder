@@ -30,6 +30,7 @@ export const de: TranslationDict = {
     subheading: 'Wählen Sie das gewünschte Format zum Herunterladen Ihrer Aufnahme.',
     copyClipboard: 'In Zwischenablage kopieren',
     copied: 'Transkript in Zwischenablage kopiert!',
+    sponsorGithub: 'Auf GitHub sponsern',
   },
   recovery: {
     title: 'Nicht gespeichertes Meeting gefunden',

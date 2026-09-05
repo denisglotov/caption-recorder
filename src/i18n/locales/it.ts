@@ -30,6 +30,7 @@ export const it: TranslationDict = {
     subheading: 'Scegli il formato preferito per scaricare la registrazione.',
     copyClipboard: 'Copia trascrizione negli appunti',
     copied: 'Trascrizione copiata negli appunti!',
+    sponsorGithub: 'Supporta su GitHub',
   },
   recovery: {
     title: 'Trovata riunione non salvata',

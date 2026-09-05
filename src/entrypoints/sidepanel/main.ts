@@ -121,7 +121,7 @@ export function setupCloseButton() {
   });
 }
 
-function localizeUI() {
+export function localizeUI() {
   const setTxt = (id: string, text: string) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -144,11 +144,15 @@ function localizeUI() {
   setTxt('lbl-turns', t('metrics.turns'));
   setTxt('txt-export-title', t('export.title'));
   setTxt('txt-export-subheading', t('export.subheading'));
+  setTxt('txt-sponsor-btn', t('export.sponsorGithub'));
+
+  const btnSponsor = document.getElementById('btn-sponsor-github');
+  if (btnSponsor) btnSponsor.title = t('export.sponsorGithub');
 
   const btnClose = document.getElementById('btn-close-sidepanel');
   if (btnClose) btnClose.title = t('controls.closePanel');
 
-  const manifest = browser.runtime.getManifest();
+  const manifest = browser.runtime?.getManifest?.();
   if (manifest?.version) {
     setTxt('brand-version', `v${manifest.version}`);
   }
@@ -176,7 +180,7 @@ function setupNavigation() {
   });
 }
 
-function setupExportButtons() {
+export function setupExportButtons() {
   const formats: ExportFormat[] = ['md', 'txt', 'srt', 'vtt'];
 
   formats.forEach((fmt) => {
@@ -201,6 +205,12 @@ function setupExportButtons() {
         }, 2000);
       }
     }
+  });
+
+  const btnSponsor = document.getElementById('btn-sponsor-github');
+  btnSponsor?.addEventListener('click', (e) => {
+    e.preventDefault();
+    browser.tabs.create({ url: 'https://github.com/sponsors/denisglotov' });
   });
 }
 

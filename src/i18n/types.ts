@@ -28,6 +28,7 @@ export interface TranslationDict {
     subheading: string;
     copyClipboard: string;
     copied: string;
+    sponsorGithub: string;
   };
   recovery: {
     title: string;

@@ -30,6 +30,7 @@ export const fr: TranslationDict = {
     subheading: 'Choisissez votre format préféré pour télécharger votre enregistrement.',
     copyClipboard: 'Copier dans le presse-papiers',
     copied: 'Transcription copiée dans le presse-papiers !',
+    sponsorGithub: 'Soutenir sur GitHub',
   },
   recovery: {
     title: 'Réunion non enregistrée trouvée',

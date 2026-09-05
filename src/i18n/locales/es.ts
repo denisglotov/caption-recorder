@@ -31,6 +31,7 @@ export const es: TranslationDict = {
     subheading: 'Elige tu formato preferido para descargar la grabación.',
     copyClipboard: 'Copiar transcripción al portapapeles',
     copied: '¡Transcripción copiada al portapapeles!',
+    sponsorGithub: 'Patrocinar en GitHub',
   },
   recovery: {
     title: 'Reunión no guardada encontrada',

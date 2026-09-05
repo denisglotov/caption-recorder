@@ -1,6 +1,6 @@
 # Chrome Web Store Listing: CaptionRecorder
 
-**Last Updated**: 2026-09-03  
+**Last Updated**: 2026-09-05  
 **Version**: 1.1.0  
 **Target Browser**: Chrome (Manifest V3), Firefox (Manifest V3), Safari
 
@@ -59,9 +59,12 @@ instant finalization, and exports clean transcripts to Markdown, TXT, SRT, or We
 
 ## Version History
 
-- **v1.1.0 (2026-09-03)**: Accurate subtitle timing via speech start tracking, Unicode meeting
-  export support, CJK word counting with Intl.Segmenter, localized popup idle state, memory leak and
-  UI fixes, and pruned bundle.
+- **v1.1.0 (2026-09-05)**: Transitioned from in-page overlay to native browser Side Panel and subtle
+  toolbar badge (`REC`), added new extension icon, standalone PWA window background recording with
+  notice popup, Firefox cross-browser support, in-place phrase revisions & persistent turn tracking,
+  accurate subtitle timing via speech start tracking, Unicode meeting export support, CJK word
+  counting with Intl.Segmenter, Spanish, Portuguese, and Italian localizations (10 native
+  languages), and memory leak & UI fixes.
 - **v1.0.0 (2026-09-03)**: Google Meet caption recording, switch-driven turn finalization,
   TXT/MD/SRT/VTT export, page reload draft persistence in overlay & popup, and 10 native UI
   languages.

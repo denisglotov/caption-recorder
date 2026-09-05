@@ -31,6 +31,7 @@ export const en: TranslationDict = {
     subheading: 'Choose your preferred format to download your recording.',
     copyClipboard: 'Copy Transcript to Clipboard',
     copied: 'Transcript copied to clipboard!',
+    sponsorGithub: 'Sponsor on GitHub',
   },
   recovery: {
     title: 'Unsaved Meeting Found',

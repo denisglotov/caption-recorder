@@ -30,6 +30,7 @@ export const ru: TranslationDict = {
     subheading: 'Выберите формат для скачивания вашей записи.',
     copyClipboard: 'Скопировать в буфер обмена',
     copied: 'Транскрипт скопирован в буфер обмена!',
+    sponsorGithub: 'Поддержать на GitHub',
   },
   recovery: {
     title: 'Найдена несохраненная встреча',
