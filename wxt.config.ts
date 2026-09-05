@@ -27,6 +27,9 @@ export default defineConfig({
         gecko: {
           id: 'caption-recorder@dymka.org',
           strict_min_version: '109.0',
+          data_collection_permissions: {
+            required: ['none'],
+          },
         },
       },
     }),

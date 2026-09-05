@@ -1,11 +1,10 @@
 # CaptionRecorder 🎙️
 
-<img src="assets/preicon.png" alt="CaptionRecorder" width="160" />
+<img src="assets/preicon.png" alt="CaptionRecorder" width="250" />
 
-A lightweight, minimalistic, and privacy-focused browser extension (Manifest V3) built with
-[WXT](https://wxt.dev/) and TypeScript. CaptionRecorder records live closed captions from video
-meetings with real-time speaker turn tracking, and exports clean transcripts to TXT, Markdown,
-SubRip (SRT), and WebVTT formats.
+A lightweight, minimalistic, and privacy-focused browser extension. CaptionRecorder records live
+closed captions from video meetings with real-time speaker turn tracking, and exports clean
+transcripts to TXT, Markdown, SubRip (SRT), and WebVTT formats for review and summarization.
 
 **Minimalist by design:** Zero runtime dependencies, zero external UI frameworks, zero cloud
 telemetry, and zero meeting screen clutter. 100% private, on-device processing.
@@ -152,6 +151,6 @@ project to support ongoing development and maintenance!
   </a>
   <br />
   <a href="https://github.com/sponsors/denisglotov">
-    <strong>Sponsor @denisglotov on GitHub</strong>
+    <strong>Sponsor me on GitHub</strong>
   </a>
 </p>
