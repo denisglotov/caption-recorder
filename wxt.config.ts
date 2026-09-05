@@ -6,12 +6,13 @@ export default defineConfig({
   runner: {
     disabled: true,
   },
-  manifest: {
+  manifest: ({ browser }) => ({
     name: '__MSG_extensionName__',
     description: '__MSG_extensionDescription__',
     default_locale: 'en',
     version: '1.1.0',
-    permissions: ['storage', 'sidePanel', 'tabs'],
+    permissions:
+      browser === 'firefox' ? ['storage', 'tabs'] : ['storage', 'sidePanel', 'tabs'],
     host_permissions: ['https://meet.google.com/*'],
     action: {
       default_title: '__MSG_extensionName__',
@@ -22,5 +23,5 @@ export default defineConfig({
       48: 'icon/48.png',
       128: 'icon/128.png',
     },
-  },
+  }),
 });

@@ -76,6 +76,12 @@ async function initSidePanel() {
 
 function setupCloseButton() {
   document.getElementById('btn-close-sidepanel')?.addEventListener('click', () => {
+    const globalObj = globalThis as unknown as {
+      browser?: { sidebarAction?: { close: () => Promise<void> } };
+    };
+    if (globalObj.browser?.sidebarAction?.close) {
+      globalObj.browser.sidebarAction.close().catch(() => {});
+    }
     window.close();
   });
 }
