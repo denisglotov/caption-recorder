@@ -41,4 +41,10 @@ export const de: TranslationDict = {
     title: 'Bereit für Meetings',
     desc: 'Öffnen Sie Google Meet, um Live-Untertitel automatisch aufzuzeichnen.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Aufnahme im Hintergrund',
+    desc: 'Die Seitenleiste ist nur in regulären Browser-Tabs verfügbar, aber Untertitel werden automatisch im Hintergrund aufgezeichnet.',
+    close: 'Verstanden',
+  },
 };

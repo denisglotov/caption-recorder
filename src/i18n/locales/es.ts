@@ -42,4 +42,10 @@ export const es: TranslationDict = {
     title: 'Listo para reuniones',
     desc: 'Abre Google Meet para grabar automáticamente subtítulos en vivo.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Grabando en segundo plano',
+    desc: 'El panel lateral solo está disponible en pestañas normales del navegador, pero los subtítulos se están grabando automáticamente.',
+    close: 'Entendido',
+  },
 };

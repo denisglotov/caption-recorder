@@ -41,4 +41,10 @@ export const it: TranslationDict = {
     title: 'Pronto per le riunioni',
     desc: 'Apri Google Meet per registrare automaticamente i sottotitoli in tempo reale.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Registrazione in background',
+    desc: 'Il pannello laterale è disponibile solo nelle schede standard del browser, ma i sottotitoli vengono registrati automaticamente.',
+    close: 'Ho capito',
+  },
 };

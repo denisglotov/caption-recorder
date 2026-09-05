@@ -41,4 +41,10 @@ export const ja: TranslationDict = {
     title: 'ミーティング待機中',
     desc: 'Google Meetを開くと、リアルタイム字幕が自動的に記録されます。',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'バックグラウンドで録画中',
+    desc: 'サイドパネルは通常のブラウザタブでのみ利用可能ですが、字幕はバックグラウンドで自動的に記録されています。',
+    close: '了解',
+  },
 };

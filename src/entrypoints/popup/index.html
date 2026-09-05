@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Caption recorder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <!-- Header -->
+      <header class="popup-header">
+        <div class="popup-brand">
+          <div class="brand-icon">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <span class="brand-name">Caption recorder</span>
+        </div>
+        <div id="status-pill" class="status-pill status-idle">
+          <span class="status-dot"></span>
+          <span id="status-text" class="status-label">Idle</span>
+        </div>
+      </header>
+
+      <!-- Main Body -->
+      <main class="popup-content">
+        <!-- PWA Notice View (Shown when running inside an App/PWA window) -->
+        <div id="view-pwa" class="notice-card" style="display: none">
+          <div class="notice-badge">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span id="pwa-title">Recording in Background</span>
+          </div>
+          <p id="pwa-desc" class="notice-text">
+            The side panel is only available in regular page mode, but meeting captions are being
+            recorded and saved automatically.
+          </p>
+        </div>
+
+        <!-- Normal Mode View (Shown when running in a standard browser tab) -->
+        <div id="view-normal" class="normal-card">
+          <p id="txt-normal-hint" class="normal-hint">
+            Open the side panel to view real-time captions and export your transcript.
+          </p>
+          <button id="btn-open-sidepanel" class="btn-primary">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+            <span id="txt-btn-open">Open Side Panel</span>
+          </button>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="main.ts"></script>
+  </body>
+</html>

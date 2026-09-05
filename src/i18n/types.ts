@@ -39,6 +39,12 @@ export interface TranslationDict {
     title: string;
     desc: string;
   };
+  pwaNotice: {
+    badge: string;
+    title: string;
+    desc: string;
+    close: string;
+  };
 }
 
 export type SupportedLocale = 'en' | 'de' | 'fr' | 'ru' | 'ja' | 'ko' | 'zh' | 'it' | 'pt' | 'es';

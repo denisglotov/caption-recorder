@@ -41,4 +41,10 @@ export const ko: TranslationDict = {
     title: '회의 준비 완료',
     desc: 'Google Meet을 열어 실시간 자막을 자동으로 기록하세요.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: '백그라운드에서 기록 중',
+    desc: '사이드 패널은 일반 브라우저 탭에서만 사용할 수 있지만 자막은 백그라운드에서 자동으로 기록되고 있습니다.',
+    close: '확인',
+  },
 };

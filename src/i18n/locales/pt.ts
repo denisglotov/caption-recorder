@@ -41,4 +41,10 @@ export const pt: TranslationDict = {
     title: 'Pronto para reuniões',
     desc: 'Abra o Google Meet para gravar automaticamente as legendas ao vivo.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Gravando em segundo plano',
+    desc: 'O painel lateral está disponível apenas em guias normais do navegador, mas as legendas estão sendo gravadas automaticamente.',
+    close: 'Entendi',
+  },
 };

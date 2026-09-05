@@ -42,4 +42,10 @@ export const en: TranslationDict = {
     title: 'Ready for Meetings',
     desc: 'Open Google Meet to automatically record live closed captions.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Recording in Background',
+    desc: 'The side panel is only available in regular browser tabs, but meeting captions are being recorded and saved automatically.',
+    close: 'Got it',
+  },
 };

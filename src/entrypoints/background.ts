@@ -3,9 +3,10 @@ import { defineBackground } from 'wxt/sandbox';
 export default defineBackground(() => {
   console.info('[CaptionRecorder] Background service worker initialized');
 
-  // Configure Chrome Side Panel to open when clicking the toolbar action icon
+  // Configure Chrome Side Panel to not override action popup clicks,
+  // allowing the popup to open in both regular browser tabs and PWA / Chrome app windows.
   if (typeof chrome !== 'undefined' && chrome.sidePanel?.setPanelBehavior) {
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((err) => {
+    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch((err) => {
       console.warn('[CaptionRecorder] Failed to set side panel behavior:', err);
     });
   }

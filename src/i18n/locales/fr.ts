@@ -41,4 +41,10 @@ export const fr: TranslationDict = {
     title: 'Prêt pour les réunions',
     desc: 'Ouvrez Google Meet pour enregistrer automatiquement les sous-titres en direct.',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: 'Enregistrement en arrière-plan',
+    desc: 'Le panneau latéral est uniquement disponible dans les onglets de navigateur standards, mais les sous-titres sont enregistrés automatiquement.',
+    close: 'Compris',
+  },
 };

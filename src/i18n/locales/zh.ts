@@ -41,4 +41,10 @@ export const zh: TranslationDict = {
     title: '就绪，等待会议',
     desc: '打开 Google Meet 即可自动录制实时字幕。',
   },
+  pwaNotice: {
+    badge: 'Caption Recorder',
+    title: '正在后台录制',
+    desc: '侧边栏仅在常规浏览器标签页中可用，但会议字幕已在后台自动录制并保存。',
+    close: '知道了',
+  },
 };
