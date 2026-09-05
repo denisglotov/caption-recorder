@@ -15,18 +15,16 @@ export interface ActionApi {
   setBadgeTextColor?: (details: { tabId?: number; color: string }) => Promise<void> | void;
 }
 
+function getExt(): typeof chrome | undefined {
+  const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
+  return g.browser || g.chrome;
+}
+
 export function getActionApi(): ActionApi | undefined {
   const g = globalThis as unknown as {
-    chrome?: {
-      action?: ActionApi;
-      browserAction?: ActionApi;
-    };
-    browser?: {
-      action?: ActionApi;
-      browserAction?: ActionApi;
-    };
+    chrome?: { action?: ActionApi; browserAction?: ActionApi };
+    browser?: { action?: ActionApi; browserAction?: ActionApi };
   };
-
   return (
     g.chrome?.action ||
     g.browser?.action ||
@@ -60,74 +58,42 @@ export async function updateActionBadge(status: string, tabId?: number): Promise
   if (!action) return;
 
   if (status === 'recording') {
-    if (action.setBadgeText) {
-      await action.setBadgeText({ text: 'REC', tabId });
-    }
-    if (action.setBadgeBackgroundColor) {
-      await action.setBadgeBackgroundColor({ color: '#EF4444', tabId });
-    }
-    if (typeof action.setBadgeTextColor === 'function') {
-      try {
-        await action.setBadgeTextColor({ color: '#FFFFFF', tabId });
-      } catch {
-        // setBadgeTextColor may not be supported in all browsers
-      }
+    await action.setBadgeText?.({ text: 'REC', tabId });
+    await action.setBadgeBackgroundColor?.({ color: '#EF4444', tabId });
+    try {
+      await action.setBadgeTextColor?.({ color: '#FFFFFF', tabId });
+    } catch {
+      // setBadgeTextColor may not be supported in all browsers
     }
   } else {
-    if (action.setBadgeText) {
-      await action.setBadgeText({ text: '', tabId });
-    }
+    await action.setBadgeText?.({ text: '', tabId });
   }
 }
 
 export async function syncWindowActionBehavior(windowId?: number): Promise<void> {
   const action = getActionApi();
   if (!action?.setPopup) return;
+  const ext = getExt();
+  if (!ext?.windows) return;
+
   try {
     let targetWinId = windowId;
-    if (
-      targetWinId == null ||
-      (typeof chrome.windows !== 'undefined' && targetWinId === chrome.windows.WINDOW_ID_NONE)
-    ) {
-      if (chrome.windows?.getLastFocused) {
-        try {
-          const focused = await chrome.windows.getLastFocused();
-          targetWinId = focused?.id;
-        } catch {
-          // Ignore
-        }
-      }
+    if (targetWinId == null || targetWinId === ext.windows.WINDOW_ID_NONE) {
+      targetWinId = (await ext.windows.getLastFocused?.())?.id;
     }
+    if (targetWinId == null) return;
 
-    if (targetWinId == null || !chrome.windows?.get) return;
-
-    let win: chrome.windows.Window | null = null;
-    try {
-      win = await chrome.windows.get(targetWinId, { populate: true });
-    } catch {
-      return;
-    }
-
+    const win = await ext.windows.get?.(targetWinId, { populate: true });
     if (!win) return;
 
     const isAppWindow = win.type != null && win.type !== 'normal';
+    const popup = isAppWindow ? 'pwa-popup.html' : '';
 
-    if (isAppWindow) {
-      await action.setPopup({ popup: 'pwa-popup.html' });
-      if (win.tabs) {
-        for (const t of win.tabs) {
-          if (t.id != null) {
-            await action.setPopup({ tabId: t.id, popup: 'pwa-popup.html' });
-          }
-        }
-      }
-    } else {
-      await action.setPopup({ popup: '' });
-      if (win.tabs) {
-        for (const t of win.tabs) {
-          if (t.id != null) {
-            await action.setPopup({ tabId: t.id, popup: '' });
-          }
+    await action.setPopup({ popup });
+    if (win.tabs) {
+      for (const t of win.tabs) {
+        if (t.id != null) {
+          await action.setPopup({ tabId: t.id, popup });
         }
       }
     }
@@ -171,6 +137,8 @@ export async function handleActionClick(tab: chrome.tabs.Tab): Promise<void> {
 export default defineBackground(() => {
   console.info('[CaptionRecorder] Background service worker initialized');
 
+  const ext = getExt();
+
   // Disable openPanelOnActionClick so Chrome does not intercept action clicks,
   // allowing pwa-popup.html to open in PWA tabs, and handleActionClick to open side panel in regular tabs.
   if (typeof chrome !== 'undefined' && chrome.sidePanel?.setPanelBehavior) {
@@ -186,88 +154,78 @@ export default defineBackground(() => {
   }
 
   // Sync action popup behavior on window focus changes
-  if (typeof chrome !== 'undefined' && chrome.windows?.onFocusChanged) {
-    chrome.windows.onFocusChanged.addListener((winId) => {
-      if (winId !== chrome.windows.WINDOW_ID_NONE) {
-        syncWindowActionBehavior(winId).catch(() => {});
-      }
-    });
-  }
+  ext?.windows?.onFocusChanged?.addListener((winId) => {
+    if (winId !== ext?.windows?.WINDOW_ID_NONE) {
+      syncWindowActionBehavior(winId).catch(() => {});
+    }
+  });
 
   // Sync on tab activation
-  if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
-    chrome.tabs.onActivated.addListener((activeInfo) => {
-      syncWindowActionBehavior(activeInfo.windowId).catch(() => {});
-    });
-  }
+  ext?.tabs?.onActivated?.addListener((activeInfo) => {
+    syncWindowActionBehavior(activeInfo.windowId).catch(() => {});
+  });
 
   // Initialize all existing windows on startup
-  if (typeof chrome !== 'undefined' && chrome.windows?.getAll) {
-    chrome.windows
-      .getAll({ populate: true })
-      .then((windows) => {
-        for (const w of windows) {
-          if (w.id != null) {
-            syncWindowActionBehavior(w.id).catch(() => {});
-          }
-        }
-      })
-      .catch(() => {});
-  }
-
-  // Listen for messages from content scripts
-  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (!message || typeof message !== 'object') return;
-
-      // PWA detection from content script
-      if (message.type === 'CR_SET_PWA_MODE' && sender.tab?.id != null) {
-        const actionApi = getActionApi();
-        if (actionApi?.setPopup) {
-          actionApi.setPopup({ tabId: sender.tab.id, popup: 'pwa-popup.html' });
-          actionApi.setPopup({ popup: 'pwa-popup.html' });
+  ext?.windows
+    ?.getAll?.({ populate: true })
+    ?.then?.((windows) => {
+      for (const w of windows) {
+        if (w.id != null) {
+          syncWindowActionBehavior(w.id).catch(() => {});
         }
       }
+    })
+    ?.catch?.(() => {});
 
-      if (message.type === 'CR_STATUS_CHANGE' && sender.tab?.id != null) {
-        const tabId = sender.tab.id;
-        const status = message.status;
+  // Listen for messages from content scripts
+  ext?.runtime?.onMessage?.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== 'object') return;
 
-        updateActionBadge(status, tabId).catch(() => {});
+    // PWA detection from content script
+    if (message.type === 'CR_SET_PWA_MODE' && sender.tab?.id != null) {
+      const actionApi = getActionApi();
+      if (actionApi?.setPopup) {
+        actionApi.setPopup({ tabId: sender.tab.id, popup: 'pwa-popup.html' });
+        actionApi.setPopup({ popup: 'pwa-popup.html' });
+      }
+    }
 
-        // Store active recording state in storage for side panel instant sync
-        chrome.storage.local.set({
+    if (message.type === 'CR_STATUS_CHANGE' && sender.tab?.id != null) {
+      const tabId = sender.tab.id;
+      const status = message.status;
+
+      updateActionBadge(status, tabId).catch(() => {});
+
+      // Store active recording state in storage for side panel instant sync
+      ext?.storage?.local?.set?.({
+        caption_recorder_recording_state: {
+          status,
+          tabId,
+          updatedAt: Date.now(),
+        },
+      });
+    }
+
+    if (message.type === 'CR_GET_ACTIVE_STATUS') {
+      ext?.storage?.local?.get?.('caption_recorder_recording_state')?.then?.((res) => {
+        sendResponse(res?.caption_recorder_recording_state || { status: 'idle' });
+      });
+      return true;
+    }
+  });
+
+  // Clean up recording state when tab is closed
+  ext?.tabs?.onRemoved?.addListener((closedTabId) => {
+    ext?.storage?.local?.get?.('caption_recorder_recording_state')?.then?.((res) => {
+      if (res?.caption_recorder_recording_state?.tabId === closedTabId) {
+        ext?.storage?.local?.set?.({
           caption_recorder_recording_state: {
-            status,
-            tabId,
+            status: 'idle',
+            tabId: null,
             updatedAt: Date.now(),
           },
         });
       }
-
-      if (message.type === 'CR_GET_ACTIVE_STATUS') {
-        chrome.storage.local.get('caption_recorder_recording_state').then((res) => {
-          sendResponse(res?.caption_recorder_recording_state || { status: 'idle' });
-        });
-        return true;
-      }
     });
-  }
-
-  // Clean up recording state when tab is closed
-  if (typeof chrome !== 'undefined' && chrome.tabs?.onRemoved) {
-    chrome.tabs.onRemoved.addListener((closedTabId) => {
-      chrome.storage.local.get('caption_recorder_recording_state').then((res) => {
-        if (res?.caption_recorder_recording_state?.tabId === closedTabId) {
-          chrome.storage.local.set({
-            caption_recorder_recording_state: {
-              status: 'idle',
-              tabId: null,
-              updatedAt: Date.now(),
-            },
-          });
-        }
-      });
-    });
-  }
+  });
 });

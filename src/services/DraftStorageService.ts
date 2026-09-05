@@ -13,12 +13,24 @@ export class DraftStorageService {
    */
   public static isContextValid(): boolean {
     try {
-      if (typeof chrome === 'undefined') return false;
-      if (chrome.runtime && !chrome.runtime.id) return false;
-      return Boolean(chrome.storage?.local);
+      const g = globalThis as unknown as {
+        browser?: { runtime?: { id?: string }; storage?: { local?: unknown } };
+        chrome?: { runtime?: { id?: string }; storage?: { local?: unknown } };
+      };
+      const runtime = g.browser?.runtime || g.chrome?.runtime;
+      if (runtime && !runtime.id) return false;
+      return Boolean(g.browser?.storage?.local || g.chrome?.storage?.local);
     } catch {
       return false;
     }
+  }
+
+  private static get storage() {
+    const g = globalThis as unknown as {
+      browser?: typeof chrome;
+      chrome?: typeof chrome;
+    };
+    return g.browser?.storage?.local || g.chrome?.storage?.local;
   }
 
   /**
@@ -46,7 +58,7 @@ export class DraftStorageService {
   }
 
   /**
-   * Immediately persist session draft to chrome.storage.local.
+   * Immediately persist session draft to storage.local.
    */
   public static async saveDraftImmediate(session: MeetingSession): Promise<void> {
     if (this.saveTimeout) {
@@ -63,7 +75,7 @@ export class DraftStorageService {
     }
 
     try {
-      await chrome.storage.local.set({
+      await this.storage?.set({
         [DRAFT_KEY]: {
           ...session,
           savedAt: Date.now(),
@@ -92,10 +104,10 @@ export class DraftStorageService {
     }
 
     try {
-      const result = await chrome.storage.local.get(DRAFT_KEY);
-      const draft = result[DRAFT_KEY];
+      const result = await this.storage?.get(DRAFT_KEY);
+      const draft = result?.[DRAFT_KEY] as MeetingSession | undefined;
       if (draft && Array.isArray(draft.segments) && (includeEmpty || draft.segments.length > 0)) {
-        return draft as MeetingSession;
+        return draft;
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -125,7 +137,7 @@ export class DraftStorageService {
     }
 
     try {
-      await chrome.storage.local.remove(DRAFT_KEY);
+      await this.storage?.remove(DRAFT_KEY);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('Extension context invalidated')) {

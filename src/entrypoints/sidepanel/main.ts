@@ -9,6 +9,11 @@ import type {
 } from '../../core/types';
 import { t } from '../../i18n';
 
+function getExt(): typeof chrome | undefined {
+  const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
+  return g.browser || g.chrome;
+}
+
 export let currentSession: MeetingSession | null = null;
 export let currentStatus: RecordingStatus = 'idle';
 export let activeDraft: InterimCaption | null = null;
@@ -151,10 +156,7 @@ function localizeUI() {
   const btnClose = document.getElementById('btn-close-sidepanel');
   if (btnClose) btnClose.title = t('controls.closePanel');
 
-  const manifest =
-    typeof chrome !== 'undefined' && chrome.runtime?.getManifest
-      ? chrome.runtime.getManifest()
-      : null;
+  const manifest = getExt()?.runtime?.getManifest?.();
   if (manifest?.version) {
     setTxt('brand-version', `v${manifest.version}`);
   }
@@ -222,7 +224,9 @@ function setupSessionControls() {
     // Notify content script to reset session if running
     const meetTab = await getTargetMeetTab();
     if (meetTab?.id) {
-      chrome.tabs.sendMessage(meetTab.id, { type: 'CR_RESET_SESSION' }).catch(() => {});
+      getExt()
+        ?.tabs?.sendMessage?.(meetTab.id, { type: 'CR_RESET_SESSION' })
+        ?.catch?.(() => {});
     }
 
     currentSession = null;
@@ -239,14 +243,15 @@ function setupSessionControls() {
 }
 
 async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
-  if (typeof chrome === 'undefined' || !chrome.tabs?.query) return null;
+  const ext = getExt();
+  if (!ext?.tabs?.query) return null;
 
   // 1. Check recording state recorded by background worker
   try {
-    const res = await chrome.storage.local.get('caption_recorder_recording_state');
+    const res = await ext.storage?.local?.get?.('caption_recorder_recording_state');
     const tabId = res?.caption_recorder_recording_state?.tabId;
-    if (tabId && chrome.tabs.get) {
-      const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (tabId && ext.tabs.get) {
+      const tab = await ext.tabs.get(tabId).catch(() => null);
       if (tab) return tab;
     }
   } catch {
@@ -255,7 +260,7 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 
   // 2. Query active tab in the browser window
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const [activeTab] = await ext.tabs.query({ active: true, lastFocusedWindow: true });
     if (activeTab?.id && activeTab.url && activeTab.url.includes('meet.google.com')) {
       return activeTab;
     }
@@ -265,7 +270,7 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 
   // 3. Fallback to any open Google Meet tab
   try {
-    const meetTabs = await chrome.tabs.query({ url: 'https://meet.google.com/*' });
+    const meetTabs = await ext.tabs.query({ url: 'https://meet.google.com/*' });
     if (meetTabs && meetTabs.length > 0) {
       const active = meetTabs.find((t) => t.active);
       return active || meetTabs[0];
@@ -278,12 +283,13 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 }
 
 async function loadInitialSession() {
+  const ext = getExt();
   let storedState: { status?: RecordingStatus; tabId?: number } | undefined;
   let draft: MeetingSession | null = null;
 
   try {
     const [stateRes, storedDraft] = await Promise.all([
-      chrome.storage.local.get('caption_recorder_recording_state'),
+      ext?.storage?.local?.get?.('caption_recorder_recording_state'),
       DraftStorageService.getUnsavedDraft(true),
     ]);
     storedState = stateRes?.caption_recorder_recording_state;
@@ -298,9 +304,9 @@ async function loadInitialSession() {
   const targetTab = await getTargetMeetTab();
   if (targetTab?.id) {
     try {
-      const response = await chrome.tabs
-        .sendMessage(targetTab.id, { type: 'CR_GET_STATUS' })
-        .catch(() => null);
+      const response = await ext?.tabs
+        ?.sendMessage?.(targetTab.id, { type: 'CR_GET_STATUS' })
+        ?.catch?.(() => null);
 
       if (response && response.session) {
         currentSession = response.session;
@@ -625,9 +631,10 @@ export function hideRecoveryBanner() {
 }
 
 function listenToExtensionMessages() {
-  if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) return;
+  const ext = getExt();
+  if (!ext?.runtime?.onMessage) return;
 
-  chrome.runtime.onMessage.addListener((message) => {
+  ext.runtime.onMessage.addListener((message) => {
     if (!message || typeof message !== 'object') return;
     const msg = message as {
       type?: string;
@@ -684,9 +691,10 @@ function listenToExtensionMessages() {
 }
 
 function listenToStorageChanges() {
-  if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return;
+  const ext = getExt();
+  if (!ext?.storage?.onChanged) return;
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  ext.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
 
     if (changes['caption_recorder_recording_state']) {

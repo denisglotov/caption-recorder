@@ -1,6 +1,11 @@
 import { t } from '../../i18n';
 import type { RecordingStatus } from '../../core/types';
 
+function getExt(): typeof chrome | undefined {
+  const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
+  return g.browser || g.chrome;
+}
+
 export function localizeUI(): void {
   const setTxt = (id: string, text: string) => {
     const el = document.getElementById(id);
@@ -14,8 +19,11 @@ export function localizeUI(): void {
 
 export async function updateStatus(): Promise<void> {
   try {
-    const res = await chrome.storage.local.get('caption_recorder_recording_state');
-    const status: RecordingStatus = res?.caption_recorder_recording_state?.status || 'idle';
+    const ext = getExt();
+    const res = await ext?.storage?.local?.get('caption_recorder_recording_state');
+    const recordingState = res?.caption_recorder_recording_state as
+      { status?: RecordingStatus } | undefined;
+    const status: RecordingStatus = recordingState?.status || 'idle';
 
     const pill = document.getElementById('status-pill');
     const label = document.getElementById('status-text');
@@ -40,7 +48,8 @@ export function setupListeners(): void {
   });
 
   // Listen to storage changes for real-time status update
-  chrome.storage?.onChanged?.addListener((changes, area) => {
+  const ext = getExt();
+  ext?.storage?.onChanged?.addListener((changes, area) => {
     if (area === 'local' && changes['caption_recorder_recording_state']) {
       updateStatus().catch(() => {});
     }
