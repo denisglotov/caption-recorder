@@ -1,4 +1,5 @@
 import type { MeetingSession } from '../core/types';
+import { browser } from 'wxt/browser';
 
 const DRAFT_KEY = 'caption_recorder_unsaved_draft';
 
@@ -13,24 +14,11 @@ export class DraftStorageService {
    */
   public static isContextValid(): boolean {
     try {
-      const g = globalThis as unknown as {
-        browser?: { runtime?: { id?: string }; storage?: { local?: unknown } };
-        chrome?: { runtime?: { id?: string }; storage?: { local?: unknown } };
-      };
-      const runtime = g.browser?.runtime || g.chrome?.runtime;
-      if (runtime && !runtime.id) return false;
-      return Boolean(g.browser?.storage?.local || g.chrome?.storage?.local);
+      if (!browser.runtime?.id) return false;
+      return Boolean(browser.storage?.local);
     } catch {
       return false;
     }
-  }
-
-  private static get storage() {
-    const g = globalThis as unknown as {
-      browser?: typeof chrome;
-      chrome?: typeof chrome;
-    };
-    return g.browser?.storage?.local || g.chrome?.storage?.local;
   }
 
   /**
@@ -75,7 +63,7 @@ export class DraftStorageService {
     }
 
     try {
-      await this.storage?.set({
+      await browser.storage.local.set({
         [DRAFT_KEY]: {
           ...session,
           savedAt: Date.now(),
@@ -104,7 +92,7 @@ export class DraftStorageService {
     }
 
     try {
-      const result = await this.storage?.get(DRAFT_KEY);
+      const result = await browser.storage.local.get(DRAFT_KEY);
       const draft = result?.[DRAFT_KEY] as MeetingSession | undefined;
       if (draft && Array.isArray(draft.segments) && (includeEmpty || draft.segments.length > 0)) {
         return draft;
@@ -137,7 +125,7 @@ export class DraftStorageService {
     }
 
     try {
-      await this.storage?.remove(DRAFT_KEY);
+      await browser.storage.local.remove(DRAFT_KEY);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('Extension context invalidated')) {

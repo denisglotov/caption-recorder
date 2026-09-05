@@ -38,7 +38,7 @@ describe('pwa-popup/main.ts Logic', () => {
       close: vi.fn(),
     };
 
-    (globalThis as unknown as { chrome: unknown }).chrome = {
+    (globalThis as unknown as Record<string, unknown>).chrome = {
       storage: {
         local: {
           get: vi.fn(async (key: string) => ({ [key]: mockStorage[key] })),

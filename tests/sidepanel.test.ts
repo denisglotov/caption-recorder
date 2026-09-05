@@ -1,3 +1,5 @@
+import { browser } from 'wxt/browser';
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   countWords,
@@ -98,7 +100,7 @@ describe('sidepanel/main.ts UI & Logic', () => {
       },
     };
 
-    (globalThis as unknown as { chrome: unknown }).chrome = {
+    (globalThis as unknown as Record<string, unknown>).chrome = {
       sidePanel: {},
       storage: {
         local: {
@@ -284,8 +286,8 @@ describe('sidepanel/main.ts UI & Logic', () => {
       // Firefox sidebar: visible with click listener
       domElements['btn-close-sidepanel'].style.display = '';
       const mockClose = vi.fn(async () => {});
-      (globalThis as unknown as { browser: unknown }).browser = {
-        sidebarAction: { close: mockClose },
+      (browser as unknown as Record<string, unknown>).sidebarAction = {
+        close: mockClose,
       };
 
       try {
@@ -296,7 +298,7 @@ describe('sidepanel/main.ts UI & Logic', () => {
           expect.any(Function)
         );
       } finally {
-        delete (globalThis as unknown as { browser?: unknown }).browser;
+        delete (browser as unknown as { sidebarAction?: unknown }).sidebarAction;
       }
     });
   });

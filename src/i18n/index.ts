@@ -9,6 +9,7 @@ import { zh } from './locales/zh';
 import { it } from './locales/it';
 import { pt } from './locales/pt';
 import { es } from './locales/es';
+import { browser } from 'wxt/browser';
 
 export * from './types';
 
@@ -32,8 +33,8 @@ const dictionaries: Record<SupportedLocale, TranslationDict> = {
 export function detectLocale(): SupportedLocale {
   let rawLocale = 'en';
 
-  if (typeof chrome !== 'undefined' && chrome?.i18n?.getUILanguage) {
-    rawLocale = chrome.i18n.getUILanguage();
+  if (typeof browser !== 'undefined' && browser.i18n?.getUILanguage) {
+    rawLocale = browser.i18n.getUILanguage();
   } else if (typeof navigator !== 'undefined' && navigator.language) {
     rawLocale = navigator.language;
   }

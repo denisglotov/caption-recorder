@@ -8,11 +8,7 @@ import type {
   TranscriptSegment,
 } from '../../core/types';
 import { t } from '../../i18n';
-
-function getExt(): typeof chrome | undefined {
-  const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
-  return g.browser || g.chrome;
-}
+import { browser } from 'wxt/browser';
 
 export let currentSession: MeetingSession | null = null;
 export let currentStatus: RecordingStatus = 'idle';
@@ -109,21 +105,17 @@ export function setupCloseButton() {
   const btnClose = document.getElementById('btn-close-sidepanel');
   if (!btnClose) return;
 
-  const globalObj = globalThis as unknown as {
-    browser?: { sidebarAction?: { close?: () => Promise<void> } };
-  };
+  const sidebar = (browser as unknown as { sidebarAction?: { close?: () => Promise<void> } })
+    .sidebarAction;
 
-  // In Chrome, window.close() does not close side panels; Chrome provides native close icon.
-  // Hide custom close button on Chrome side panels while keeping it in Firefox sidebar.
-  const isFirefox = Boolean(globalObj.browser?.sidebarAction);
-  if (!isFirefox && typeof chrome !== 'undefined' && chrome.sidePanel) {
+  if (!sidebar && 'sidePanel' in browser && Reflect.get(browser, 'sidePanel')) {
     btnClose.style.display = 'none';
     return;
   }
 
   btnClose.addEventListener('click', () => {
-    if (globalObj.browser?.sidebarAction?.close) {
-      globalObj.browser.sidebarAction.close().catch(() => {});
+    if (sidebar?.close) {
+      sidebar.close().catch(() => {});
     }
     window.close();
   });
@@ -156,7 +148,7 @@ function localizeUI() {
   const btnClose = document.getElementById('btn-close-sidepanel');
   if (btnClose) btnClose.title = t('controls.closePanel');
 
-  const manifest = getExt()?.runtime?.getManifest?.();
+  const manifest = browser.runtime.getManifest();
   if (manifest?.version) {
     setTxt('brand-version', `v${manifest.version}`);
   }
@@ -224,9 +216,7 @@ function setupSessionControls() {
     // Notify content script to reset session if running
     const meetTab = await getTargetMeetTab();
     if (meetTab?.id) {
-      getExt()
-        ?.tabs?.sendMessage?.(meetTab.id, { type: 'CR_RESET_SESSION' })
-        ?.catch?.(() => {});
+      browser.tabs.sendMessage(meetTab.id, { type: 'CR_RESET_SESSION' }).catch(() => {});
     }
 
     currentSession = null;
@@ -242,16 +232,14 @@ function setupSessionControls() {
   document.getElementById('btn-rec-discard')?.addEventListener('click', handleDiscard);
 }
 
-async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
-  const ext = getExt();
-  if (!ext?.tabs?.query) return null;
-
+async function getTargetMeetTab(): Promise<import('wxt/browser').Tabs.Tab | null> {
   // 1. Check recording state recorded by background worker
   try {
-    const res = await ext.storage?.local?.get?.('caption_recorder_recording_state');
-    const tabId = res?.caption_recorder_recording_state?.tabId;
-    if (tabId && ext.tabs.get) {
-      const tab = await ext.tabs.get(tabId).catch(() => null);
+    const res = await browser.storage.local.get('caption_recorder_recording_state');
+    const tabId = (res as { caption_recorder_recording_state?: { tabId?: number } })
+      ?.caption_recorder_recording_state?.tabId;
+    if (tabId && browser.tabs.get) {
+      const tab = await browser.tabs.get(tabId).catch(() => null);
       if (tab) return tab;
     }
   } catch {
@@ -260,7 +248,7 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 
   // 2. Query active tab in the browser window
   try {
-    const [activeTab] = await ext.tabs.query({ active: true, lastFocusedWindow: true });
+    const [activeTab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
     if (activeTab?.id && activeTab.url && activeTab.url.includes('meet.google.com')) {
       return activeTab;
     }
@@ -270,7 +258,7 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 
   // 3. Fallback to any open Google Meet tab
   try {
-    const meetTabs = await ext.tabs.query({ url: 'https://meet.google.com/*' });
+    const meetTabs = await browser.tabs.query({ url: 'https://meet.google.com/*' });
     if (meetTabs && meetTabs.length > 0) {
       const active = meetTabs.find((t) => t.active);
       return active || meetTabs[0];
@@ -283,16 +271,22 @@ async function getTargetMeetTab(): Promise<chrome.tabs.Tab | null> {
 }
 
 async function loadInitialSession() {
-  const ext = getExt();
   let storedState: { status?: RecordingStatus; tabId?: number } | undefined;
   let draft: MeetingSession | null = null;
 
   try {
     const [stateRes, storedDraft] = await Promise.all([
-      ext?.storage?.local?.get?.('caption_recorder_recording_state'),
+      browser.storage.local.get('caption_recorder_recording_state'),
       DraftStorageService.getUnsavedDraft(true),
     ]);
-    storedState = stateRes?.caption_recorder_recording_state;
+    storedState = (
+      stateRes as {
+        caption_recorder_recording_state?: {
+          status?: RecordingStatus;
+          tabId?: number;
+        };
+      }
+    )?.caption_recorder_recording_state;
     draft = storedDraft;
   } catch (err) {
     console.warn('[SidePanel] Error reading initial storage state', err);
@@ -304,14 +298,22 @@ async function loadInitialSession() {
   const targetTab = await getTargetMeetTab();
   if (targetTab?.id) {
     try {
-      const response = await ext?.tabs
-        ?.sendMessage?.(targetTab.id, { type: 'CR_GET_STATUS' })
+      const response = await browser.tabs
+        .sendMessage(targetTab.id, { type: 'CR_GET_STATUS' })
         ?.catch?.(() => null);
 
-      if (response && response.session) {
-        currentSession = response.session;
-        currentStatus = response.status || (isRecording ? 'recording' : 'idle');
-        activeDraft = response.activeDraft || null;
+      const statusRes = response as
+        | {
+            session?: MeetingSession;
+            status?: RecordingStatus;
+            activeDraft?: InterimCaption;
+          }
+        | undefined;
+
+      if (statusRes?.session) {
+        currentSession = statusRes.session;
+        currentStatus = statusRes.status || (isRecording ? 'recording' : 'idle');
+        activeDraft = statusRes.activeDraft || null;
         updateStatus(currentStatus);
         renderTranscript(true);
         updateMetrics();
@@ -631,70 +633,69 @@ export function hideRecoveryBanner() {
 }
 
 function listenToExtensionMessages() {
-  const ext = getExt();
-  if (!ext?.runtime?.onMessage) return;
+  if (!browser.runtime.onMessage) return;
 
-  ext.runtime.onMessage.addListener((message) => {
+  browser.runtime.onMessage.addListener((message: unknown) => {
     if (!message || typeof message !== 'object') return;
-    const msg = message as {
+    const msgEvent = message as {
       type?: string;
       status?: RecordingStatus;
       segment?: TranscriptSegment;
+      activeDraft?: InterimCaption;
       caption?: InterimCaption | null;
     };
 
-    if (msg.type === 'CR_STATUS_CHANGE' && msg.status) {
-      updateStatus(msg.status);
-      if (msg.status === 'recording') {
+    if (msgEvent.type === 'CR_STATUS_CHANGE' && msgEvent.status) {
+      updateStatus(msgEvent.status);
+      if (msgEvent.status === 'recording') {
         hideRecoveryBanner();
       }
       renderTranscript();
       updateMetrics();
-    } else if (msg.type === 'CR_NEW_TURN' && msg.segment) {
+    } else if (msgEvent.type === 'CR_NEW_TURN' && msgEvent.segment) {
       if (!currentSession) {
         currentSession = {
           id: `session_${Date.now()}`,
           title: 'Google Meet',
-          startTime: msg.segment.startTime,
+          startTime: msgEvent.segment.startTime,
           segments: [],
           platform: 'google-meet',
         };
       }
-      currentSession.segments.push(msg.segment);
+      currentSession.segments.push(msgEvent.segment);
       activeDraft = null;
-      appendTurnElement(msg.segment);
+      appendTurnElement(msgEvent.segment);
       hideRecoveryBanner();
-    } else if (msg.type === 'CR_UPDATE_TURN' && msg.segment) {
+    } else if (msgEvent.type === 'CR_UPDATE_TURN' && msgEvent.segment) {
       if (!currentSession) {
         currentSession = {
           id: `session_${Date.now()}`,
           title: 'Google Meet',
-          startTime: msg.segment.startTime,
-          segments: [msg.segment],
+          startTime: msgEvent.segment.startTime,
+          segments: [msgEvent.segment],
           platform: 'google-meet',
         };
         renderTranscript();
         updateMetrics();
       } else {
-        const idx = currentSession.segments.findIndex((s) => s.id === msg.segment!.id);
+        const idx = currentSession.segments.findIndex((s) => s.id === msgEvent.segment!.id);
         if (idx >= 0) {
-          currentSession.segments[idx] = msg.segment;
+          currentSession.segments[idx] = msgEvent.segment;
         } else {
-          currentSession.segments.push(msg.segment);
+          currentSession.segments.push(msgEvent.segment);
         }
-        updateTurnElement(msg.segment);
+        updateTurnElement(msgEvent.segment);
       }
-    } else if (msg.type === 'CR_ACTIVE_CAPTION') {
-      updateActiveDraftTurn(msg.caption || null);
+    } else if (msgEvent.type === 'CR_ACTIVE_CAPTION') {
+      updateActiveDraftTurn(msgEvent.caption || null);
     }
   });
 }
 
 function listenToStorageChanges() {
-  const ext = getExt();
-  if (!ext?.storage?.onChanged) return;
+  if (!browser.storage.onChanged) return;
 
-  ext.storage.onChanged.addListener((changes, areaName) => {
+  browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
 
     if (changes['caption_recorder_recording_state']) {

@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SessionRecorder } from '../src/core/SessionRecorder';
 import { DraftStorageService } from '../src/services/DraftStorageService';
@@ -23,7 +24,7 @@ describe('SessionRecorder Headless Coordinator', () => {
     storageListeners = [];
     sentMessages = [];
 
-    (globalThis as unknown as { chrome: unknown }).chrome = {
+    (globalThis as unknown as Record<string, unknown>).chrome = {
       storage: {
         local: {
           get: vi.fn(async (key: string) => ({ [key]: mockStorage[key] })),
@@ -358,8 +359,8 @@ describe('SessionRecorder Headless Coordinator', () => {
 
     expect(window.removeEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
     expect(window.removeEventListener).toHaveBeenCalledWith('pagehide', expect.any(Function));
-    expect(chrome.storage.onChanged.removeListener).toHaveBeenCalled();
-    expect(chrome.runtime.onMessage.removeListener).toHaveBeenCalled();
+    expect(browser.storage.onChanged.removeListener).toHaveBeenCalled();
+    expect(browser.runtime.onMessage.removeListener).toHaveBeenCalled();
     expect(mockAdapter.stop).toHaveBeenCalledTimes(1);
   });
 });

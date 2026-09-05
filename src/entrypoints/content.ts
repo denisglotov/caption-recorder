@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/sandbox';
 import type { ContentScriptContext } from 'wxt/client';
 import { getAdapterForUrl, ADAPTER_MATCH_PATTERNS } from '../adapters';
@@ -16,8 +17,8 @@ export function initContentScript(ctx: ContentScriptContext) {
   let currentUrl = '';
 
   // Inform background service worker if Google Meet is launched in a standalone PWA window
-  if (isPwaMode() && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-    chrome.runtime.sendMessage({ type: 'CR_SET_PWA_MODE' }).catch(() => {});
+  if (isPwaMode() && browser.runtime?.sendMessage) {
+    browser.runtime.sendMessage({ type: 'CR_SET_PWA_MODE' }).catch(() => {});
   }
 
   const syncRecorder = () => {

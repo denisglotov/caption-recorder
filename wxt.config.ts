@@ -11,8 +11,7 @@ export default defineConfig({
     description: '__MSG_extensionDescription__',
     default_locale: 'en',
     version: '1.1.0',
-    permissions:
-      browser === 'firefox' ? ['storage', 'tabs'] : ['storage', 'sidePanel', 'tabs'],
+    permissions: browser === 'firefox' ? ['storage', 'tabs'] : ['storage', 'sidePanel', 'tabs'],
     host_permissions: ['https://meet.google.com/*'],
     action: {
       default_title: '__MSG_extensionName__',

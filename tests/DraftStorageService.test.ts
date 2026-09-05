@@ -9,7 +9,8 @@ describe('DraftStorageService', () => {
     vi.useFakeTimers();
     mockStorage = {};
 
-    (globalThis as unknown as { chrome: unknown }).chrome = {
+    (globalThis as unknown as Record<string, unknown>).browser = {
+      runtime: { id: 'test' },
       storage: {
         local: {
           get: vi.fn(async (key: string) => ({ [key]: mockStorage[key] })),
@@ -26,7 +27,8 @@ describe('DraftStorageService', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    delete (globalThis as unknown as { chrome?: unknown }).chrome;
+    delete (globalThis as unknown as Record<string, unknown>).browser;
+    delete (globalThis as unknown as Record<string, unknown>).chrome;
     vi.restoreAllMocks();
   });
 
@@ -157,8 +159,11 @@ describe('DraftStorageService', () => {
   it('handles extension context invalidation gracefully without throwing or logging error', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // 1. Simulating chrome.runtime.id becoming undefined (orphaned content script)
-    (globalThis as unknown as { chrome: { runtime?: { id?: string } } }).chrome.runtime = {};
+    // 1. Simulating browser.runtime.id becoming undefined (orphaned content script)
+    Object.assign(
+      (globalThis as unknown as Record<string, unknown>).browser as Record<string, unknown>,
+      { runtime: {} }
+    );
     expect(DraftStorageService.isContextValid()).toBe(false);
 
     const session = createTestSession();
@@ -169,12 +174,14 @@ describe('DraftStorageService', () => {
     // 2. Simulating chrome API throwing "Extension context invalidated"
     (
       globalThis as unknown as {
-        chrome: { runtime?: { id?: string }; storage: { local: { set: unknown } } };
+        browser: { runtime: { id?: string }; storage: { local: { set: unknown } } };
       }
-    ).chrome.runtime = { id: 'test_id' };
+    ).browser.runtime = { id: 'test_id' };
     (
-      globalThis as unknown as { chrome: { storage: { local: { set: unknown } } } }
-    ).chrome.storage.local.set = vi
+      globalThis as unknown as {
+        browser: { runtime: { id: 'test' }; storage: { local: { set: unknown } } };
+      }
+    ).browser.storage.local.set = vi
       .fn()
       .mockRejectedValue(new Error('Extension context invalidated.'));
 

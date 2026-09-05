@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initContentScript, isPwaMode } from '../src/entrypoints/content';
 import type { ContentScriptContext } from 'wxt/client';
@@ -19,7 +20,7 @@ describe('content.ts Content Script Lifecycle', () => {
     messageListeners = [];
     invalidatedCallbacks = [];
 
-    (globalThis as unknown as { chrome: unknown }).chrome = {
+    (globalThis as unknown as Record<string, unknown>).chrome = {
       storage: {
         local: {
           get: vi.fn(async (key: string) => ({ [key]: mockStorage[key] })),
@@ -143,7 +144,7 @@ describe('content.ts Content Script Lifecycle', () => {
       });
 
       const { getRecorder } = initContentScript(mockCtx);
-      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CR_SET_PWA_MODE' });
+      expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CR_SET_PWA_MODE' });
       getRecorder()?.destroy();
     });
 

@@ -1,10 +1,6 @@
+import { browser } from 'wxt/browser';
 import { t } from '../../i18n';
 import type { RecordingStatus } from '../../core/types';
-
-function getExt(): typeof chrome | undefined {
-  const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
-  return g.browser || g.chrome;
-}
 
 export function localizeUI(): void {
   const setTxt = (id: string, text: string) => {
@@ -19,8 +15,7 @@ export function localizeUI(): void {
 
 export async function updateStatus(): Promise<void> {
   try {
-    const ext = getExt();
-    const res = await ext?.storage?.local?.get('caption_recorder_recording_state');
+    const res = await browser.storage.local.get('caption_recorder_recording_state');
     const recordingState = res?.caption_recorder_recording_state as
       { status?: RecordingStatus } | undefined;
     const status: RecordingStatus = recordingState?.status || 'idle';
@@ -48,8 +43,7 @@ export function setupListeners(): void {
   });
 
   // Listen to storage changes for real-time status update
-  const ext = getExt();
-  ext?.storage?.onChanged?.addListener((changes, area) => {
+  browser.storage.onChanged?.addListener((changes, area) => {
     if (area === 'local' && changes['caption_recorder_recording_state']) {
       updateStatus().catch(() => {});
     }

@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import type { PlatformAdapter } from '../adapters/PlatformAdapter';
 import type {
   ExtensionMessage,
@@ -24,9 +25,9 @@ export class SessionRecorder {
   private messageHandler:
     | ((
         message: unknown,
-        sender: unknown,
+        sender: import('wxt/browser').Runtime.MessageSender,
         sendResponse: (response?: unknown) => void
-      ) => boolean | void)
+      ) => void)
     | null = null;
 
   constructor(adapter: PlatformAdapter) {
@@ -295,7 +296,7 @@ export class SessionRecorder {
   }
 
   private attachStorageListener(): void {
-    if (typeof chrome !== 'undefined' && chrome?.storage?.onChanged) {
+    if (browser.storage?.onChanged) {
       this.storageChangeHandler = (changes, areaName) => {
         if (!DraftStorageService.isContextValid()) return;
         if (areaName === 'local' && changes['caption_recorder_unsaved_draft']) {
@@ -306,13 +307,17 @@ export class SessionRecorder {
           }
         }
       };
-      chrome.storage.onChanged.addListener(this.storageChangeHandler);
+      browser.storage.onChanged.addListener(this.storageChangeHandler);
     }
   }
 
   private attachMessageListener(): void {
-    if (typeof chrome !== 'undefined' && chrome?.runtime?.onMessage) {
-      this.messageHandler = (message, _sender, sendResponse) => {
+    if (browser.runtime?.onMessage) {
+      this.messageHandler = (
+        message: unknown,
+        _sender: import('wxt/browser').Runtime.MessageSender,
+        sendResponse: (response?: unknown) => void
+      ) => {
         if (!message || typeof message !== 'object') return;
         const msg = message as { type?: string };
 
@@ -332,14 +337,15 @@ export class SessionRecorder {
           return true;
         }
       };
-      chrome.runtime.onMessage.addListener(this.messageHandler);
+      // @ts-expect-error WXT types restrict return types
+      browser.runtime.onMessage.addListener(this.messageHandler);
     }
   }
 
   private sendMessage(message: ExtensionMessage): void {
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    if (browser.runtime?.sendMessage) {
       try {
-        chrome.runtime.sendMessage(message).catch(() => {
+        browser.runtime.sendMessage(message).catch(() => {
           // Ignored if receiver (side panel / background) isn't actively listening
         });
       } catch {
@@ -356,13 +362,14 @@ export class SessionRecorder {
       window.removeEventListener('pagehide', this.unloadHandler);
     }
 
-    if (this.storageChangeHandler && typeof chrome !== 'undefined' && chrome?.storage?.onChanged) {
-      chrome.storage.onChanged.removeListener(this.storageChangeHandler);
+    if (this.storageChangeHandler && browser.storage?.onChanged) {
+      browser.storage.onChanged.removeListener(this.storageChangeHandler);
       this.storageChangeHandler = null;
     }
 
-    if (this.messageHandler && typeof chrome !== 'undefined' && chrome?.runtime?.onMessage) {
-      chrome.runtime.onMessage.removeListener(this.messageHandler);
+    if (this.messageHandler && browser.runtime?.onMessage) {
+      // @ts-expect-error WXT types restrict return types
+      browser.runtime.onMessage.removeListener(this.messageHandler);
       this.messageHandler = null;
     }
 
