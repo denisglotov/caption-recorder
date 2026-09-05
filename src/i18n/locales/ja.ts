@@ -30,6 +30,7 @@ export const ja: TranslationDict = {
     subheading: 'ダウンロードする形式を選択してください。',
     copyClipboard: 'クリップボードにコピー',
     copied: '文字起こしをクリップボードにコピーしました！',
+    sponsorGithub: 'GitHubでスポンサーになる',
   },
   recovery: {
     title: '未保存の会議が見つかりました',

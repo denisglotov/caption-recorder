@@ -30,6 +30,7 @@ export const ko: TranslationDict = {
     subheading: '원하는 형식을 선택하여 녹음 데이터를 다운로드하세요.',
     copyClipboard: '클립보드에 복사',
     copied: '전사 내용이 클립보드에 복사되었습니다!',
+    sponsorGithub: 'GitHub에서 후원하기',
   },
   recovery: {
     title: '저장되지 않은 회의 발견',

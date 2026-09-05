@@ -30,6 +30,7 @@ export const zh: TranslationDict = {
     subheading: '选择您喜欢的文件格式以下载录音。',
     copyClipboard: '复制到剪贴板',
     copied: '转录内容已复制到剪贴板！',
+    sponsorGithub: '在 GitHub 上赞助',
   },
   recovery: {
     title: '发现未保存的会议',

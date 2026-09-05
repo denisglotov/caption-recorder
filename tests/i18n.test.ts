@@ -18,6 +18,7 @@ describe('i18n subsystem', () => {
     expect(t('metrics.speakers')).toBe('Speakers');
     expect(t('metrics.words')).toBe('Words');
     expect(t('metrics.turns')).toBe('Turns');
+    expect(t('export.sponsorGithub')).toBe('Sponsor on GitHub');
 
     setLocale('de');
     expect(t('controls.newSession')).toBe('Neues Meeting');
@@ -29,5 +30,12 @@ describe('i18n subsystem', () => {
     expect(t('metrics.speakers')).toBe('Sprecher');
     expect(t('metrics.words')).toBe('Wörter');
     expect(t('metrics.turns')).toBe('Wechsel');
+    expect(t('export.sponsorGithub')).toBe('Auf GitHub sponsern');
+
+    setLocale('ru');
+    expect(t('export.sponsorGithub')).toBe('Поддержать на GitHub');
+
+    setLocale('ja');
+    expect(t('export.sponsorGithub')).toBe('GitHubでスポンサーになる');
   });
 });

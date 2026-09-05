@@ -14,6 +14,8 @@ import {
   showRecoveryBanner,
   hideRecoveryBanner,
   setupCloseButton,
+  localizeUI,
+  setupExportButtons,
   setCurrentSession,
   setCurrentStatus,
   setActiveDraft,
@@ -80,6 +82,8 @@ describe('sidepanel/main.ts UI & Logic', () => {
     createElement('sec-recovery');
     createElement('txt-recovery-desc');
     createElement('btn-close-sidepanel');
+    createElement('txt-sponsor-btn');
+    createElement('btn-sponsor-github');
 
     (globalThis as unknown as { document: unknown }).document = {
       getElementById: (id: string) => domElements[id] || null,
@@ -300,6 +304,49 @@ describe('sidepanel/main.ts UI & Logic', () => {
       } finally {
         delete (browser as unknown as { sidebarAction?: unknown }).sidebarAction;
       }
+    });
+  });
+
+  describe('localizeUI', () => {
+    it('localizes the sponsor button text and title', () => {
+      localizeUI();
+      expect(domElements['txt-sponsor-btn'].textContent).toBe('Sponsor on GitHub');
+      expect((domElements['btn-sponsor-github'] as unknown as { title: string }).title).toBe(
+        'Sponsor on GitHub'
+      );
+    });
+  });
+
+  describe('setupExportButtons', () => {
+    it('attaches a click handler to the sponsor button to open GitHub Sponsors', () => {
+      let clickHandler: (e: { preventDefault: () => void }) => void = () => {};
+      domElements['btn-sponsor-github'].addEventListener = vi.fn(
+        (event: string, handler: unknown) => {
+          if (event === 'click') {
+            clickHandler = handler as (e: { preventDefault: () => void }) => void;
+          }
+        }
+      );
+
+      const mockCreate = vi.fn();
+      (browser as unknown as { tabs: { create: typeof mockCreate } }).tabs = {
+        create: mockCreate,
+      };
+
+      setupExportButtons();
+
+      expect(domElements['btn-sponsor-github'].addEventListener).toHaveBeenCalledWith(
+        'click',
+        expect.any(Function)
+      );
+
+      const preventDefault = vi.fn();
+      clickHandler?.({ preventDefault });
+
+      expect(preventDefault).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalledWith({
+        url: 'https://github.com/sponsors/denisglotov',
+      });
     });
   });
 });
