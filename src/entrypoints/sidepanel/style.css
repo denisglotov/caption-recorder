@@ -298,6 +298,7 @@ body {
 /* Content Area */
 .sidepanel-content {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
@@ -306,6 +307,8 @@ body {
   height: 100%;
   width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 /* Transcript List */

@@ -158,18 +158,34 @@ export function localizeUI() {
   }
 }
 
-function setupNavigation() {
+export function setupNavigation() {
   const tabLive = document.getElementById('tab-btn-live');
   const tabExport = document.getElementById('tab-btn-export');
   const paneLive = document.getElementById('pane-live');
   const paneExport = document.getElementById('pane-export');
 
+  let wasNearBottomBeforeSwitch = true;
+  let savedScrollTop = 0;
+
   const switchTab = (tab: 'live' | 'export') => {
-    tabLive?.classList.toggle('active', tab === 'live');
-    tabExport?.classList.toggle('active', tab === 'export');
+    tabLive?.classList?.toggle('active', tab === 'live');
+    tabExport?.classList?.toggle('active', tab === 'export');
+
+    if (tab === 'export' && paneLive) {
+      wasNearBottomBeforeSwitch = isNearBottom(paneLive);
+      savedScrollTop = paneLive.scrollTop;
+    }
 
     if (paneLive) paneLive.style.display = tab === 'live' ? 'block' : 'none';
     if (paneExport) paneExport.style.display = tab === 'export' ? 'block' : 'none';
+
+    if (tab === 'live' && paneLive) {
+      if (wasNearBottomBeforeSwitch) {
+        scrollToBottom(paneLive);
+      } else {
+        paneLive.scrollTop = savedScrollTop;
+      }
+    }
   };
 
   tabLive?.addEventListener('click', () => switchTab('live'));
@@ -488,6 +504,32 @@ export function createEmptyStateElement(mode: 'recording' | 'idle'): HTMLDivElem
   return emptyEl;
 }
 
+export function getScrollContainer(listEl?: HTMLElement | null): HTMLElement | null {
+  const el =
+    listEl || (typeof document !== 'undefined' ? document.getElementById('transcript-list') : null);
+  return (
+    (typeof document !== 'undefined' ? document.getElementById('pane-live') : null) ||
+    el?.closest?.('.pane-content') ||
+    el?.parentElement ||
+    el ||
+    null
+  );
+}
+
+export function isNearBottom(container: HTMLElement | null, threshold: number = 120): boolean {
+  if (!container) return true;
+  return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+}
+
+export function scrollToBottom(container: HTMLElement | null, listEl?: HTMLElement | null): void {
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
+  if (listEl && listEl !== container) {
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+}
+
 export function updateActiveDraftTurn(caption: InterimCaption | null) {
   const listEl = document.getElementById('transcript-list');
   if (!listEl) return;
@@ -514,7 +556,8 @@ export function updateActiveDraftTurn(caption: InterimCaption | null) {
 
   const baseTime = currentSession?.startTime || Date.now();
   const timeStr = formatElapsed((activeDraft.timestamp || Date.now()) - baseTime);
-  const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+  const scrollContainer = getScrollContainer(listEl);
+  const wasNearBottom = isNearBottom(scrollContainer);
 
   if (!activeEl) {
     activeEl = createTurnElement(activeDraft.speaker, activeDraft.text, timeStr, undefined, true);
@@ -524,7 +567,7 @@ export function updateActiveDraftTurn(caption: InterimCaption | null) {
   }
 
   if (wasNearBottom) {
-    listEl.scrollTop = listEl.scrollHeight;
+    scrollToBottom(scrollContainer, listEl);
   }
 
   updateMetrics();
@@ -542,7 +585,8 @@ export function appendTurnElement(segment: TranscriptSegment): void {
 
   const baseTime = currentSession?.startTime || Date.now();
   const timeStr = formatElapsed(segment.startTime - baseTime);
-  const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+  const scrollContainer = getScrollContainer(listEl);
+  const wasNearBottom = isNearBottom(scrollContainer);
 
   const turnEl = createTurnElement(segment.speaker, segment.text, timeStr, segment.id);
   listEl.appendChild(turnEl);
@@ -551,7 +595,7 @@ export function appendTurnElement(segment: TranscriptSegment): void {
   if (segment.speaker) cachedSpeakersSet.add(segment.speaker);
 
   if (wasNearBottom) {
-    listEl.scrollTop = listEl.scrollHeight;
+    scrollToBottom(scrollContainer, listEl);
   }
 
   updateMetrics();
@@ -565,11 +609,17 @@ export function updateTurnElement(segment: TranscriptSegment): void {
   if (turnEl) {
     const baseTime = currentSession?.startTime || Date.now();
     const timeStr = formatElapsed(segment.startTime - baseTime);
+    const scrollContainer = getScrollContainer(listEl);
+    const wasNearBottom = isNearBottom(scrollContainer);
 
     populateTurnContent(turnEl, segment.speaker, segment.text, timeStr);
 
     recalculateCachedMetrics();
     updateMetrics();
+
+    if (wasNearBottom) {
+      scrollToBottom(scrollContainer, listEl);
+    }
   } else {
     renderTranscript();
     updateMetrics();
@@ -607,12 +657,13 @@ export function renderTranscript(forceScroll: boolean = false) {
     );
   }
 
-  const wasNearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+  const scrollContainer = getScrollContainer(listEl);
+  const wasNearBottom = isNearBottom(scrollContainer);
 
   listEl.replaceChildren(...children);
 
   if (forceScroll || wasNearBottom) {
-    listEl.scrollTop = listEl.scrollHeight;
+    scrollToBottom(scrollContainer, listEl);
   }
 }
 

@@ -19,6 +19,10 @@ import {
   setCurrentSession,
   setCurrentStatus,
   setActiveDraft,
+  getScrollContainer,
+  isNearBottom,
+  scrollToBottom,
+  setupNavigation,
 } from '../src/entrypoints/sidepanel/main';
 import type { MeetingSession, TranscriptSegment } from '../src/core/types';
 
@@ -35,13 +39,42 @@ describe('sidepanel/main.ts UI & Logic', () => {
         id,
         textContent: initialText,
         className: '',
+        classList: {
+          toggle: vi.fn((cls: string, force?: boolean) => {
+            const has = el.className.includes(cls);
+            if (force === true || (force === undefined && !has)) {
+              el.className = `${el.className} ${cls}`.trim();
+            } else if (force === false || (force === undefined && has)) {
+              el.className = el.className.replace(cls, '').trim();
+            }
+          }),
+          add: vi.fn((cls: string) => {
+            el.className = `${el.className} ${cls}`.trim();
+          }),
+          remove: vi.fn((cls: string) => {
+            el.className = el.className.replace(cls, '').trim();
+          }),
+          contains: vi.fn((cls: string) => el.className.includes(cls)),
+        },
         style: {} as Record<string, string>,
         children,
         scrollHeight: 500,
         scrollTop: 0,
         clientHeight: 400,
+        parentElement: null as HTMLElement | null,
+        closest: vi.fn((sel: string) => {
+          let curr: HTMLElement | null = el as unknown as HTMLElement;
+          while (curr) {
+            if (sel.startsWith('.') && curr.className?.includes(sel.slice(1))) return curr;
+            if (sel.startsWith('#') && curr.id === sel.slice(1)) return curr;
+            curr = (curr as unknown as { parentElement: HTMLElement | null }).parentElement;
+          }
+          return null;
+        }),
         appendChild: vi.fn((child: HTMLElement) => {
           children.push(child);
+          (child as unknown as { parentElement: HTMLElement | null }).parentElement =
+            el as unknown as HTMLElement;
           if (child.id) domElements[child.id] = child;
           return child;
         }),
@@ -49,6 +82,8 @@ describe('sidepanel/main.ts UI & Logic', () => {
           children.length = 0;
           for (const node of nodes) {
             children.push(node);
+            (node as unknown as { parentElement: HTMLElement | null }).parentElement =
+              el as unknown as HTMLElement;
             if (node.id) domElements[node.id] = node;
           }
         }),
@@ -117,7 +152,11 @@ describe('sidepanel/main.ts UI & Logic', () => {
       return el;
     };
 
-    createMockElement('div', 'transcript-list');
+    const paneLive = createMockElement('section', 'pane-live');
+    paneLive.className = 'pane-content';
+    const transcriptList = createMockElement('div', 'transcript-list');
+    paneLive.appendChild(transcriptList);
+
     createMockElement('div', 'status-pill');
     createMockElement('div', 'status-text');
     createMockElement('button', 'btn-new-meeting');
@@ -131,6 +170,10 @@ describe('sidepanel/main.ts UI & Logic', () => {
     createMockElement('button', 'btn-close-sidepanel');
     createMockElement('span', 'txt-sponsor-btn');
     createMockElement('a', 'btn-sponsor-github');
+    createMockElement('button', 'tab-btn-live');
+    createMockElement('button', 'tab-btn-export');
+    const paneExport = createMockElement('section', 'pane-export');
+    paneExport.className = 'pane-content';
 
     (globalThis as unknown as { document: unknown }).document = {
       getElementById: (id: string) => domElements[id] || null,
@@ -381,6 +424,233 @@ describe('sidepanel/main.ts UI & Logic', () => {
       expect(mockCreate).toHaveBeenCalledWith({
         url: 'https://github.com/sponsors/denisglotov',
       });
+    });
+  });
+
+  describe('autoscroll and scroll container handling', () => {
+    it('detects the appropriate scroll container', () => {
+      expect(getScrollContainer(domElements['transcript-list'])).toBe(domElements['pane-live']);
+      expect(getScrollContainer(null)).toBe(domElements['pane-live']);
+
+      // Fallback when pane-live is missing
+      const standaloneList = {
+        parentElement: null,
+        closest: vi.fn(() => null),
+      } as unknown as HTMLElement;
+      delete domElements['pane-live'];
+      expect(getScrollContainer(standaloneList)).toBe(standaloneList);
+    });
+
+    it('determines if container is near bottom accurately based on threshold', () => {
+      const container = {
+        scrollHeight: 1000,
+        scrollTop: 600,
+        clientHeight: 400,
+      } as HTMLElement;
+
+      // Distance from bottom is 1000 - 600 - 400 = 0 (< 120)
+      expect(isNearBottom(container)).toBe(true);
+
+      // Distance is 1000 - 550 - 400 = 50 (< 120)
+      container.scrollTop = 550;
+      expect(isNearBottom(container)).toBe(true);
+
+      // Distance is 1000 - 400 - 400 = 200 (>= 120) -> scrolled up
+      container.scrollTop = 400;
+      expect(isNearBottom(container)).toBe(false);
+
+      expect(isNearBottom(null)).toBe(true);
+    });
+
+    it('scrolls container and fallback list to bottom with scrollToBottom', () => {
+      const container = {
+        scrollHeight: 1000,
+        scrollTop: 0,
+      } as HTMLElement;
+      const list = {
+        scrollHeight: 1000,
+        scrollTop: 0,
+      } as HTMLElement;
+
+      scrollToBottom(container, list);
+      expect(container.scrollTop).toBe(1000);
+      expect(list.scrollTop).toBe(1000);
+    });
+
+    const setElementGeometry = (el: HTMLElement, scrollHeight: number, clientHeight: number) => {
+      Object.defineProperty(el, 'scrollHeight', {
+        value: scrollHeight,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(el, 'clientHeight', {
+        value: clientHeight,
+        configurable: true,
+        writable: true,
+      });
+    };
+
+    it('scrolls pane-live to bottom when appending a new turn while near bottom', () => {
+      const pane = domElements['pane-live'];
+      setElementGeometry(pane, 1000, 400);
+      pane.scrollTop = 600; // at bottom (1000 - 600 - 400 = 0)
+
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('recording');
+
+      const segment: TranscriptSegment = {
+        id: 'seg_1',
+        speaker: 'Alice',
+        startTime: 1050,
+        endTime: 2000,
+        text: 'New statement',
+      };
+
+      appendTurnElement(segment);
+
+      expect(pane.scrollTop).toBe(pane.scrollHeight);
+    });
+
+    it('preserves scroll position when user scrolled up and a new turn arrives', () => {
+      const pane = domElements['pane-live'];
+      setElementGeometry(pane, 2000, 400);
+      pane.scrollTop = 500; // user scrolled up (2000 - 500 - 400 = 1100 >= 120)
+
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('recording');
+
+      const segment: TranscriptSegment = {
+        id: 'seg_2',
+        speaker: 'Bob',
+        startTime: 2050,
+        endTime: 3000,
+        text: 'Another statement',
+      };
+
+      appendTurnElement(segment);
+
+      expect(pane.scrollTop).toBe(500); // Unchanged!
+    });
+
+    it('scrolls pane-live to bottom when active draft streams while near bottom', () => {
+      const pane = domElements['pane-live'];
+      setElementGeometry(pane, 1200, 400);
+      pane.scrollTop = 800; // at bottom
+
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('recording');
+
+      updateActiveDraftTurn({
+        speaker: 'Alice',
+        text: 'Live caption words...',
+        timestamp: 2500,
+      });
+
+      expect(pane.scrollTop).toBe(pane.scrollHeight);
+    });
+
+    it('scrolls pane-live to bottom when updating an existing turn while near bottom', () => {
+      const pane = domElements['pane-live'];
+      setElementGeometry(pane, 1200, 400);
+      pane.scrollTop = 800; // at bottom
+
+      const segment: TranscriptSegment = {
+        id: 'seg_upd',
+        speaker: 'Alice',
+        startTime: 1000,
+        endTime: 2000,
+        text: 'Initial sentence',
+      };
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [segment],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('recording');
+      appendTurnElement(segment);
+
+      pane.scrollTop = 800;
+      segment.text = 'Initial sentence extended with more words as speech continues';
+      updateTurnElement(segment);
+
+      expect(pane.scrollTop).toBe(pane.scrollHeight);
+    });
+
+    it('force scrolls to bottom on renderTranscript(true)', () => {
+      const pane = domElements['pane-live'];
+      setElementGeometry(pane, 1500, 400);
+      pane.scrollTop = 100; // user was scrolled up
+
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [{ id: '1', speaker: 'Denis', startTime: 1000, endTime: 2000, text: 'Hi' }],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('idle');
+
+      renderTranscript(true);
+
+      expect(pane.scrollTop).toBe(pane.scrollHeight);
+    });
+
+    it('preserves or restores scroll state when navigating between tabs', () => {
+      const pane = domElements['pane-live'];
+      const paneExport = domElements['pane-export'];
+      const tabLive = domElements['tab-btn-live'];
+      const tabExport = domElements['tab-btn-export'];
+
+      setElementGeometry(pane, 2000, 400);
+      pane.scrollTop = 500; // user was scrolled up reading history
+
+      setupNavigation();
+
+      // Find click handlers attached to tabs
+      const exportClickHandler = (
+        tabExport.addEventListener as ReturnType<typeof vi.fn>
+      ).mock.calls.find((call: unknown[]) => call[0] === 'click')?.[1];
+      const liveClickHandler = (
+        tabLive.addEventListener as ReturnType<typeof vi.fn>
+      ).mock.calls.find((call: unknown[]) => call[0] === 'click')?.[1];
+
+      // Switch to export tab
+      exportClickHandler?.();
+      expect(pane.style.display).toBe('none');
+      expect(paneExport.style.display).toBe('block');
+
+      // Simulate browser resetting scrollTop when hidden
+      pane.scrollTop = 0;
+
+      // Switch back to live tab
+      liveClickHandler?.();
+      expect(pane.style.display).toBe('block');
+      expect(pane.scrollTop).toBe(500); // Restored!
     });
   });
 });
