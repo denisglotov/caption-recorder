@@ -115,21 +115,33 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(activeDrafts[1]?.text).toBe('Hello world');
     expect(emittedFinals.length).toBe(0);
 
-    // Author switches to next chunk
+    // Author switches to second chunk: both chunks 1 and 2 are pending
     const { textEl: chunk2 } = createMockCaptionElement('Next sentence', 'Denis');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       chunk2
     );
 
-    // First chunk is finalized
+    expect(emittedFinals.length).toBe(0);
+    expect(activeDrafts[activeDrafts.length - 1]?.text).toBe('Hello world Next sentence');
+
+    // Author reaches third chunk: third-from-last (chunk 1) is now finalized
+    const { textEl: chunk3 } = createMockCaptionElement('Third sentence', 'Denis');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk3
+    );
+
     expect(emittedFinals.length).toBe(1);
     expect(emittedFinals[0].text).toBe('Hello world');
+    expect(activeDrafts[activeDrafts.length - 1]?.text).toBe('Next sentence Third sentence');
 
-    // Second chunk is now the active draft
-    expect(activeDrafts[activeDrafts.length - 1]?.text).toBe('Next sentence');
+    // Flush finalizes remaining pending chunks
+    adapter.flush();
+    expect(emittedFinals.length).toBe(3);
+    expect(emittedFinals[1].text).toBe('Next sentence');
+    expect(emittedFinals[2].text).toBe('Third sentence');
   });
 
-  it('emits previous caption chunk immediately when the author switches to a new caption chunk (div) without waiting for timers', () => {
+  it('emits previous caption chunk immediately when author reaches 3 chunks without waiting for timers', () => {
     const emitted: InterimCaption[] = [];
     adapter.observe((cap) => emitted.push(cap));
 
@@ -140,30 +152,38 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     );
     expect(emitted.length).toBe(0);
 
-    // Author "You" begins second chunk div
+    // Author "You" begins second chunk div: both pending
     const { textEl: chunk2 } = createMockCaptionElement('Second sentence spoken.', 'You');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       chunk2
     );
+    expect(emitted.length).toBe(0);
 
-    // First chunk emits IMMEDIATELY (0ms delay)
-    expect(emitted.length).toBe(1);
-    expect(emitted[0].speaker).toBe('You');
-    expect(emitted[0].text).toBe('First sentence spoken.');
-
-    // Second chunk is currently pending
-    expect(emitted.find((c) => c.text === 'Second sentence spoken.')).toBeUndefined();
-
-    // Author "You" begins third chunk div
+    // Author "You" begins third chunk div: chunk 1 is finalized immediately
     const { textEl: chunk3 } = createMockCaptionElement('Third sentence spoken.', 'You');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       chunk3
     );
 
-    // Second chunk emits immediately
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].speaker).toBe('You');
+    expect(emitted[0].text).toBe('First sentence spoken.');
+
+    // Author "You" begins fourth chunk div: chunk 2 is finalized immediately
+    const { textEl: chunk4 } = createMockCaptionElement('Fourth sentence spoken.', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk4
+    );
+
     expect(emitted.length).toBe(2);
     expect(emitted[1].speaker).toBe('You');
     expect(emitted[1].text).toBe('Second sentence spoken.');
+
+    // Flush captures remaining pending chunks (chunks 3 and 4)
+    adapter.flush();
+    expect(emitted.length).toBe(4);
+    expect(emitted[2].text).toBe('Third sentence spoken.');
+    expect(emitted[3].text).toBe('Fourth sentence spoken.');
   });
 
   it('supports N concurrent speakers without prematurely finalizing one speaker when another speaks', () => {
@@ -186,22 +206,29 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     // Speaker 1 is NOT prematurely flushed; both You and Bob are concurrently pending
     expect(emitted.length).toBe(0);
 
-    // Speaker 1 speaks a new chunk div
+    // Speaker 1 speaks a second chunk: both You chunks are pending, Bob still pending
     const { textEl: text3 } = createMockCaptionElement('Speaking third', 'You');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       text3
     );
+    expect(emitted.length).toBe(0);
 
-    // Speaker 1's previous chunk is now finalized, while Bob remains pending
+    // Speaker 1 speaks a third chunk: You's first chunk is finalized, Bob remains pending
+    const { textEl: text4 } = createMockCaptionElement('Speaking fourth', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      text4
+    );
+
     expect(emitted.length).toBe(1);
     expect(emitted[0].speaker).toBe('You');
     expect(emitted[0].text).toBe('Speaking first');
 
-    // Flush on stop/pause captures Bob and You's latest chunk
+    // Flush on stop/pause captures Bob and You's remaining chunks
     adapter.flush();
-    expect(emitted.length).toBe(3);
+    expect(emitted.length).toBe(4);
     expect(emitted.some((c) => c.speaker === 'Bob' && c.text === 'Speaking second')).toBe(true);
     expect(emitted.some((c) => c.speaker === 'You' && c.text === 'Speaking third')).toBe(true);
+    expect(emitted.some((c) => c.speaker === 'You' && c.text === 'Speaking fourth')).toBe(true);
   });
 
   it('does not re-emit unchanged lingering captions while element remains in DOM', () => {
@@ -249,31 +276,33 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted[0].text).toBe('Closing remarks before clearing.');
   });
 
-  it('scans multiple caption chunks in DOM in sequence, finalizing earlier chunks and keeping last chunk pending', () => {
+  it('scans multiple caption chunks in DOM in sequence, finalizing earlier chunks and keeping last 2 chunks pending', () => {
     const emitted: InterimCaption[] = [];
     adapter.observe((cap) => emitted.push(cap));
 
     const { textEl: chunk1 } = createMockCaptionElement('Paragraph 1', 'Denis');
-    const { textEl: chunk2 } = createMockCaptionElement('Paragraph 2 in progress', 'Denis');
+    const { textEl: chunk2 } = createMockCaptionElement('Paragraph 2', 'Denis');
+    const { textEl: chunk3 } = createMockCaptionElement('Paragraph 3 in progress', 'Denis');
 
     (
       globalThis as unknown as { document: { querySelectorAll: unknown } }
-    ).document.querySelectorAll = vi.fn(() => [chunk1, chunk2]);
+    ).document.querySelectorAll = vi.fn(() => [chunk1, chunk2, chunk3]);
 
     (adapter as unknown as { scanActiveCaptions: () => void }).scanActiveCaptions();
 
-    // Chunk 1 switched to Chunk 2 and is finalized
+    // Chunk 1 is 3rd-from-last and is finalized
     expect(emitted.length).toBe(1);
     expect(emitted[0].text).toBe('Paragraph 1');
 
-    // Subsequent scan with no new chunks does not emit Chunk 2 while still active
+    // Subsequent scan with no new chunks does not emit duplicates
     (adapter as unknown as { scanActiveCaptions: () => void }).scanActiveCaptions();
     expect(emitted.length).toBe(1);
 
-    // On stop/flush, Chunk 2 is finalized
+    // On stop/flush, Chunks 2 & 3 are finalized
     adapter.flush();
-    expect(emitted.length).toBe(2);
-    expect(emitted[1].text).toBe('Paragraph 2 in progress');
+    expect(emitted.length).toBe(3);
+    expect(emitted[1].text).toBe('Paragraph 2');
+    expect(emitted[2].text).toBe('Paragraph 3 in progress');
   });
 
   it('correctly detects CC enabled via caption text presence or button aria-pressed', () => {
@@ -479,10 +508,14 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
       chunk1
     );
 
-    // Second chunk arrives (e.g. "Hello!"), flushing chunk1
     const { textEl: chunk2 } = createMockCaptionElement('Hello!', 'You');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       chunk2
+    );
+
+    const { textEl: chunk3 } = createMockCaptionElement('Continuing speech...', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      chunk3
     );
 
     expect(emitted.length).toBe(1);
@@ -596,7 +629,7 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted[1].text).toBe('Second sentence spoken 20 seconds later.');
   });
 
-  it('updates turn in-place when a long monologue (>15s) is extended with trailing words', () => {
+  it('updates turn when a long monologue is extended with trailing words', () => {
     const emitted: InterimCaption[] = [];
     adapter.observe((cap) => emitted.push(cap));
 
@@ -608,7 +641,6 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     adapter.flush();
 
     expect(emitted.length).toBe(1);
-    const firstTurnId = emitted[0].id;
 
     // 35 seconds later (> 15s limit), trailing words are added to the existing speech container
     vi.setSystemTime(135000);
@@ -616,17 +648,16 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       textEl
     );
+    adapter.flush();
 
-    // Should update in-place with the same ID, NOT create a duplicate turn
     expect(emitted.length).toBe(2);
-    expect(emitted[1].id).toBe(firstTurnId);
     expect(emitted[1].speaker).toBe('Alice');
     expect(emitted[1].text).toBe(
       'Initial monologue section. Extended with more thoughts 35s later.'
     );
   });
 
-  it('updates turn in-place when ASR refines words on a long turn after 15s', () => {
+  it('updates turn when ASR refines words on a long turn', () => {
     const emitted: InterimCaption[] = [];
     adapter.observe((cap) => emitted.push(cap));
 
@@ -641,7 +672,6 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     adapter.flush();
 
     expect(emitted.length).toBe(1);
-    const firstTurnId = emitted[0].id;
 
     // 40 seconds later, Meet ASR refines the ending of the sentence
     vi.setSystemTime(140000);
@@ -650,9 +680,9 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       textEl
     );
+    adapter.flush();
 
     expect(emitted.length).toBe(2);
-    expect(emitted[1].id).toBe(firstTurnId);
     expect(emitted[1].text).toBe(
       'Тогда я хотел прям по быстренько пройтись реклама в играх и оплаты. Я может'
     );
@@ -691,24 +721,35 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     // Still pending without premature flush
     expect(emitted.length).toBe(0);
 
-    // Alice starts a new chunk
+    // Alice starts a second chunk: both Alice chunks are pending, Bob still pending
     vi.setSystemTime(106000);
     const { textEl: aliceEl2 } = createMockCaptionElement('Alice begins next thought.', 'Alice');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       aliceEl2
     );
 
-    // Alice's first thought is finalized; Bob remains pending
+    expect(emitted.length).toBe(0);
+
+    // Alice starts a third chunk: Alice's first thought is now finalized
+    vi.setSystemTime(108000);
+    const { textEl: aliceEl3 } = createMockCaptionElement('Alice reaches third thought.', 'Alice');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      aliceEl3
+    );
+
     expect(emitted.length).toBe(1);
     expect(emitted[0].speaker).toBe('Alice');
     expect(emitted[0].text).toBe('Alice begins speaking her thought. And here is the conclusion.');
 
-    // Bob's speech and Alice's second thought are finalized on flush
+    // Bob's speech and Alice's remaining thoughts are finalized on flush
     adapter.flush();
-    expect(emitted.length).toBe(3);
+    expect(emitted.length).toBe(4);
     expect(emitted.some((c) => c.speaker === 'Bob' && c.text === 'Quick interjection.')).toBe(true);
     expect(
       emitted.some((c) => c.speaker === 'Alice' && c.text === 'Alice begins next thought.')
+    ).toBe(true);
+    expect(
+      emitted.some((c) => c.speaker === 'Alice' && c.text === 'Alice reaches third thought.')
     ).toBe(true);
   });
 });

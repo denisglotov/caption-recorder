@@ -1,21 +1,16 @@
 import type { InterimCaption } from '../core/types';
 import type { PlatformAdapter } from './PlatformAdapter';
 
-interface ElementTurnInfo {
+interface ChunkInfo {
   id: string;
-  speaker: string;
+  el: HTMLElement;
   text: string;
   startTime: number;
-  emitted: boolean;
 }
 
-interface PendingCaptionInfo {
-  id: string;
-  speaker: string;
-  el: HTMLElement;
-  trackKey: HTMLElement;
-  text: string;
-  startTime: number;
+interface SpeakerState {
+  lastFinalizedText: string;
+  activeChunks: ChunkInfo[];
 }
 
 export class GoogleMeetAdapter implements PlatformAdapter {
@@ -31,9 +26,9 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private onActiveCaptionCallback: ((caption: InterimCaption | null) => void) | null = null;
   private lastKnownCaptionsEnabled: boolean = false;
 
-  // Active chunk tracking for author-based switching supporting N concurrent speakers
-  private pendingCaptions = new Map<string, PendingCaptionInfo>();
-  private elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
+  // 3-chunk sliding window state per speaker:
+  // last and second-from-last chunks are pending; third-from-last chunk is finalized.
+  private speakerStates = new Map<string, SpeakerState>();
   private lastEmittedText: string = '';
   private lastEmittedSpeaker: string = '';
 
@@ -294,52 +289,42 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
     this.flush();
     this.onActiveCaptionCallback?.(null);
-    this.pendingCaptions.clear();
+    this.speakerStates.clear();
     this.lastEmittedText = '';
     this.lastEmittedSpeaker = '';
-    this.elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
   }
 
   public flushSpeaker(speaker: string): void {
-    const pending = this.pendingCaptions.get(speaker);
-    if (!pending) return;
-
-    this.pendingCaptions.delete(speaker);
-
-    const { id, trackKey, text, startTime } = pending;
-    const cleanText = text.trim();
-    if (!cleanText || (speaker === this.lastEmittedSpeaker && cleanText === this.lastEmittedText)) {
-      if (trackKey) {
-        const info = this.elementTurns.get(trackKey);
-        if (info) info.emitted = true;
-      }
-      return;
-    }
-
-    if (trackKey) {
-      const info = this.elementTurns.get(trackKey);
-      if (info) {
-        info.emitted = true;
-        info.text = cleanText;
-        info.speaker = speaker;
-      }
-    }
-    this.lastEmittedSpeaker = speaker;
-    this.lastEmittedText = cleanText;
+    const speakerState = this.speakerStates.get(speaker);
+    if (!speakerState) return;
 
     const now = Date.now();
-    this.onCaptionCallback?.({
-      id,
-      speaker: speaker.trim() || 'Speaker',
-      text: cleanText,
-      startTime: startTime || now,
-      timestamp: now,
-    });
+    const N = speakerState.activeChunks.length;
+    const pendingStartIndex = Math.max(0, N - 2);
+    const unfinalized = speakerState.activeChunks.slice(pendingStartIndex);
+
+    for (const chunk of unfinalized) {
+      const cleanText = chunk.text.trim();
+      if (cleanText && cleanText !== speakerState.lastFinalizedText) {
+        speakerState.lastFinalizedText = cleanText;
+        this.lastEmittedSpeaker = speaker;
+        this.lastEmittedText = cleanText;
+        this.onCaptionCallback?.({
+          id: chunk.id,
+          speaker: speaker.trim() || 'Speaker',
+          text: cleanText,
+          startTime: chunk.startTime,
+          timestamp: now,
+        });
+      }
+    }
+
+    speakerState.activeChunks = [];
   }
 
   public flush(): void {
     this.onActiveCaptionCallback?.(null);
-    for (const speaker of Array.from(this.pendingCaptions.keys())) {
+    for (const speaker of Array.from(this.speakerStates.keys())) {
       this.flushSpeaker(speaker);
     }
   }
@@ -367,9 +352,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       return;
     }
 
-    for (const [speaker, pending] of Array.from(this.pendingCaptions.entries())) {
-      if (!this.isElementConnected(pending.el)) {
-        this.flushSpeaker(speaker);
+    for (const [speaker, state] of Array.from(this.speakerStates.entries())) {
+      if (state.activeChunks.length > 0) {
+        const latestChunk = state.activeChunks[state.activeChunks.length - 1];
+        if (!this.isElementConnected(latestChunk.el)) {
+          this.flushSpeaker(speaker);
+        }
       }
     }
 
@@ -397,9 +385,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private scanActiveCaptions(): void {
     if (!this.onCaptionCallback) return;
 
-    for (const [speaker, pending] of Array.from(this.pendingCaptions.entries())) {
-      if (!this.isElementConnected(pending.el)) {
-        this.flushSpeaker(speaker);
+    for (const [speaker, state] of Array.from(this.speakerStates.entries())) {
+      if (state.activeChunks.length > 0) {
+        const latestChunk = state.activeChunks[state.activeChunks.length - 1];
+        if (!this.isElementConnected(latestChunk.el)) {
+          this.flushSpeaker(speaker);
+        }
       }
     }
 
@@ -407,69 +398,39 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
     );
 
-    if (textEls.length === 0 && this.pendingCaptions.size > 0) {
-      this.flush();
+    if (textEls.length === 0) {
+      let hasActive = false;
+      for (const state of this.speakerStates.values()) {
+        if (state.activeChunks.length > 0) {
+          hasActive = true;
+          break;
+        }
+      }
+      if (hasActive) {
+        this.flush();
+      }
       return;
     }
 
+    const presentSpeakers = new Set<string>();
     for (let i = 0; i < textEls.length; i++) {
       const el = textEls[i];
       if (!this.isExcluded(el)) {
+        const sp = this.extractSpeakerForTextElement(el).trim() || 'Speaker';
+        presentSpeakers.add(sp);
         this.processCaptionElement(el);
       }
     }
-  }
 
-  private getCaptionTrackKey(textEl: HTMLElement): HTMLElement {
-    const block =
-      (typeof textEl.closest === 'function' &&
-        textEl.closest<HTMLElement>(
-          '[jsname="dsyhDe"] > div, .nMcdL, .bj4p3b, .nMxHgf, [jscontroller="TEZ40e"]'
-        )) ||
-      textEl.parentElement?.parentElement ||
-      textEl.parentElement;
-
-    return block || textEl;
+    for (const [speaker, state] of this.speakerStates.entries()) {
+      if (state.activeChunks.length > 0 && !presentSpeakers.has(speaker)) {
+        this.flushSpeaker(speaker);
+      }
+    }
   }
 
   private generateTurnId(startTime: number): string {
     return `seg_${startTime}_${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  private isSameTurnRevisionOrExtension(oldText: string, newText: string): boolean {
-    const o = oldText.trim();
-    const n = newText.trim();
-    if (!o || !n) return false;
-    if (o === n) return true;
-
-    // Direct extension or truncation
-    if (n.startsWith(o) || o.startsWith(n)) return true;
-
-    // Space-delimited word prefix overlap
-    const oWords = o.toLowerCase().split(/\s+/);
-    const nWords = n.toLowerCase().split(/\s+/);
-    if (oWords.length > 0 && nWords.length > 0) {
-      let commonPrefixLen = 0;
-      const minLen = Math.min(oWords.length, nWords.length);
-      while (commonPrefixLen < minLen && oWords[commonPrefixLen] === nWords[commonPrefixLen]) {
-        commonPrefixLen++;
-      }
-      if (commonPrefixLen >= 2 || commonPrefixLen / Math.max(oWords.length, nWords.length) >= 0.3) {
-        return true;
-      }
-    }
-
-    // Character-level prefix overlap (especially for CJK languages without spaces)
-    let charPrefix = 0;
-    const minChars = Math.min(o.length, n.length);
-    while (charPrefix < minChars && o[charPrefix] === n[charPrefix]) {
-      charPrefix++;
-    }
-    if (charPrefix >= 4 || charPrefix / Math.max(o.length, n.length) >= 0.3) {
-      return true;
-    }
-
-    return false;
   }
 
   private processCaptionElement(textEl: HTMLElement): void {
@@ -478,124 +439,76 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     const text = textEl.textContent?.trim() || '';
     if (!this.isValidCaptionText(text)) return;
 
-    const speaker = this.extractSpeakerForTextElement(textEl);
-    const speakerKey = speaker.trim() || 'Speaker';
-    const trackKey = this.getCaptionTrackKey(textEl);
+    const speaker = this.extractSpeakerForTextElement(textEl).trim() || 'Speaker';
 
-    const existingTurn = this.elementTurns.get(trackKey);
-    const now = Date.now();
-
-    // Fast check: If this container was previously pending for a different speaker, flush that speaker:
-    for (const [sKey, p] of this.pendingCaptions.entries()) {
-      if (p.trackKey === trackKey && sKey !== speakerKey) {
-        this.flushSpeaker(sKey);
+    // Container reuse check: if this element was previously tracked for another speaker, remove it
+    for (const [sName, state] of this.speakerStates.entries()) {
+      if (sName !== speaker) {
+        state.activeChunks = state.activeChunks.filter((c) => c.el !== textEl);
       }
     }
 
-    // Case 1: The turn for this element was already emitted as a segment.
-    if (existingTurn?.emitted) {
-      // If text and speaker are identical, skip unchanged lingering caption (no duplicate emit).
-      if (existingTurn.text === text && existingTurn.speaker === speaker) {
-        return;
-      }
-
-      // Check if this is an in-place extension or revision for the same speaker.
-      // An update is considered an in-place revision if:
-      // 1. Same speaker
-      // 2. Either within the 15s tentative ASR window, OR new text is an extension/revision of existing text.
-      const isSameSpeaker = existingTurn.speaker === speaker;
-      const isRecentOrExtension =
-        isSameSpeaker &&
-        (now - existingTurn.startTime < 15000 ||
-          this.isSameTurnRevisionOrExtension(existingTurn.text, text));
-
-      if (isRecentOrExtension) {
-        existingTurn.text = text;
-        existingTurn.speaker = speaker;
-        this.lastEmittedSpeaker = speaker;
-        this.lastEmittedText = text;
-
-        this.onCaptionCallback?.({
-          id: existingTurn.id,
-          speaker: speaker.trim() || 'Speaker',
-          text,
-          startTime: existingTurn.startTime,
-          timestamp: now,
-        });
-        return;
-      }
-
-      // Container reused for a different speaker or a completely disjoint new utterance after a gap:
-      // discard the old emitted turn mapping so a new turn is created.
-      this.elementTurns.delete(trackKey);
+    let speakerState = this.speakerStates.get(speaker);
+    if (!speakerState) {
+      speakerState = { lastFinalizedText: '', activeChunks: [] };
+      this.speakerStates.set(speaker, speakerState);
     }
 
-    // Case 2: Skip lingering caption that matches the last emitted text/speaker if not tracked
-    if (speaker === this.lastEmittedSpeaker && text === this.lastEmittedText) {
-      const id = this.generateTurnId(now);
-      this.elementTurns.set(trackKey, {
-        id,
-        speaker,
+    const existingIndex = speakerState.activeChunks.findIndex((c) => c.el === textEl);
+    if (existingIndex >= 0) {
+      speakerState.activeChunks[existingIndex].text = text;
+    } else {
+      const now = Date.now();
+      speakerState.activeChunks.push({
+        id: this.generateTurnId(now),
+        el: textEl,
         text,
         startTime: now,
-        emitted: true,
       });
-      return;
     }
 
-    const pending = this.pendingCaptions.get(speakerKey);
-
-    // Case 3: Same chunk element and same speaker: update current speech draft
-    if (pending && pending.trackKey === trackKey) {
-      pending.text = text;
-      pending.el = textEl;
-      const activeTurn = this.elementTurns.get(trackKey);
-      if (activeTurn) {
-        activeTurn.text = text;
+    const N = speakerState.activeChunks.length;
+    // 3-chunk sliding window:
+    // If N >= 3, the third-from-last chunk (index N - 3) is finalized
+    if (N >= 3) {
+      const finalizeCandidate = speakerState.activeChunks[N - 3];
+      const cleanFinalizeText = finalizeCandidate.text.trim();
+      if (cleanFinalizeText && cleanFinalizeText !== speakerState.lastFinalizedText) {
+        speakerState.lastFinalizedText = cleanFinalizeText;
+        this.lastEmittedSpeaker = speaker;
+        this.lastEmittedText = cleanFinalizeText;
+        this.onCaptionCallback?.({
+          id: finalizeCandidate.id,
+          speaker,
+          text: cleanFinalizeText,
+          startTime: finalizeCandidate.startTime,
+          timestamp: Date.now(),
+        });
       }
+
+      if (N > 3) {
+        speakerState.activeChunks = speakerState.activeChunks.slice(-3);
+      }
+    }
+
+    // Active draft ticker: combine pending chunks (last and second-from-last)
+    const activeN = speakerState.activeChunks.length;
+    const pendingStartIndex = Math.max(0, activeN - 2);
+    const pendingChunks = speakerState.activeChunks.slice(pendingStartIndex);
+    const combinedPendingText = pendingChunks
+      .map((c) => c.text.trim())
+      .filter(Boolean)
+      .join(' ');
+
+    if (combinedPendingText && pendingChunks.length > 0) {
       this.onActiveCaptionCallback?.({
-        id: pending.id,
-        speaker: speaker.trim() || 'Speaker',
-        text,
-        startTime: pending.startTime,
+        id: pendingChunks[0].id,
+        speaker,
+        text: combinedPendingText,
+        startTime: pendingChunks[0].startTime,
         timestamp: Date.now(),
       });
-      return;
     }
-
-    // Case 4: Chunk element switched for THIS author:
-    // Finalize THIS author's previous chunk immediately.
-    // NOTE: This does NOT finalize any other active speaker's pending chunk!
-    if (pending && pending.trackKey !== trackKey) {
-      this.flushSpeaker(speakerKey);
-    }
-
-    const activeTurn = this.elementTurns.get(trackKey);
-    const turnId = activeTurn && !activeTurn.emitted ? activeTurn.id : this.generateTurnId(now);
-    const turnInfo: ElementTurnInfo = {
-      id: turnId,
-      speaker,
-      text,
-      startTime: activeTurn && !activeTurn.emitted ? activeTurn.startTime : now,
-      emitted: false,
-    };
-    this.elementTurns.set(trackKey, turnInfo);
-
-    this.pendingCaptions.set(speakerKey, {
-      id: turnId,
-      speaker,
-      el: textEl,
-      trackKey,
-      text,
-      startTime: turnInfo.startTime,
-    });
-    this.onActiveCaptionCallback?.({
-      id: turnId,
-      speaker: speaker.trim() || 'Speaker',
-      text,
-      startTime: turnInfo.startTime,
-      timestamp: now,
-    });
   }
 
   private extractSpeakerForTextElement(textEl: HTMLElement): string {
@@ -657,14 +570,22 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       text: el.textContent?.slice(0, 60),
     }));
 
+    const speakerSummaries = Array.from(this.speakerStates.entries()).map(([speaker, state]) => ({
+      speaker,
+      lastFinalizedText: state.lastFinalizedText,
+      activeChunksCount: state.activeChunks.length,
+      activeChunks: state.activeChunks.map((c) => ({
+        id: c.id,
+        text: c.text.slice(0, 40),
+        startTime: c.startTime,
+      })),
+    }));
+
     const result = {
       isCaptionsEnabled: this.isCaptionsEnabled(),
       activeCaptionElementsCount: textEls.length,
       activeCaptionElements: textEls,
-      pendingCaptions: Array.from(this.pendingCaptions.values()).map((p) => ({
-        speaker: p.speaker,
-        text: p.text,
-      })),
+      speakers: speakerSummaries,
       lastEmittedText: this.lastEmittedText,
     };
 
