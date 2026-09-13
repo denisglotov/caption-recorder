@@ -434,8 +434,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
         }
 
         const isExtension =
-          cleanText.startsWith(existingChunk.text) ||
-          existingChunk.text.startsWith(cleanText);
+          cleanText.startsWith(existingChunk.text) || existingChunk.text.startsWith(cleanText);
         const hasActiveChunks = speakerState.activeChunks.some((c) => !c.finalized);
 
         if (isExtension || hasActiveChunks) {

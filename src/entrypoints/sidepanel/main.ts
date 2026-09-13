@@ -651,9 +651,7 @@ export function renderTranscript(forceScroll: boolean = false) {
   if (hasActive) {
     for (const draft of activeDrafts) {
       const timeStr = formatElapsed((draft.timestamp || Date.now()) - baseTime);
-      children.push(
-        createTurnElement(draft.speaker, draft.text, timeStr, draft.id, true)
-      );
+      children.push(createTurnElement(draft.speaker, draft.text, timeStr, draft.id, true));
     }
   }
 

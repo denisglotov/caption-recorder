@@ -773,7 +773,7 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     const { textEl: e4 } = createMockCaptionElement('Sentence four.', 'You');
 
     // Process all 4 elements
-    const proc = (adapter as unknown as { processCaptionElement: (el: unknown) => void });
+    const proc = adapter as unknown as { processCaptionElement: (el: unknown) => void };
     proc.processCaptionElement(e1);
     proc.processCaptionElement(e2);
     proc.processCaptionElement(e3); // e1 finalized
