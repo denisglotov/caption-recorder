@@ -12,7 +12,7 @@ import { browser } from 'wxt/browser';
 
 export let currentSession: MeetingSession | null = null;
 export let currentStatus: RecordingStatus = 'idle';
-export let activeDraft: InterimCaption | null = null;
+export let activeDrafts: InterimCaption[] = [];
 let durationInterval: ReturnType<typeof setInterval> | null = null;
 
 let cachedWordsCount = 0;
@@ -37,8 +37,8 @@ export function setCurrentStatus(status: RecordingStatus): void {
   currentStatus = status;
 }
 
-export function setActiveDraft(draft: InterimCaption | null): void {
-  activeDraft = draft;
+export function setActiveDrafts(drafts: InterimCaption[]): void {
+  activeDrafts = drafts;
 }
 
 const segmenter: Intl.Segmenter | null =
@@ -246,7 +246,7 @@ function setupSessionControls() {
     }
 
     currentSession = null;
-    activeDraft = null;
+    activeDrafts = [];
     updateStatus('idle');
     renderTranscript();
     updateMetrics();
@@ -332,14 +332,14 @@ async function loadInitialSession() {
         | {
             session?: MeetingSession;
             status?: RecordingStatus;
-            activeDraft?: InterimCaption;
+            activeDrafts?: InterimCaption[];
           }
         | undefined;
 
       if (statusRes?.session) {
         currentSession = statusRes.session;
         currentStatus = statusRes.status || (isRecording ? 'recording' : 'idle');
-        activeDraft = statusRes.activeDraft || null;
+        activeDrafts = statusRes.activeDrafts || [];
         updateStatus(currentStatus);
         renderTranscript(true);
         updateMetrics();
@@ -530,12 +530,12 @@ export function scrollToBottom(container: HTMLElement | null, listEl?: HTMLEleme
   }
 }
 
-export function updateActiveDraftTurn(caption: InterimCaption | null) {
+export function updateActiveDraftTurn(captions: InterimCaption[] = []) {
   const listEl = document.getElementById('transcript-list');
   if (!listEl) return;
 
-  activeDraft = caption;
-  const hasActive = Boolean(activeDraft && currentStatus === 'recording');
+  activeDrafts = captions;
+  const hasActive = Boolean(activeDrafts.length > 0 && currentStatus === 'recording');
 
   if ((!currentSession || currentSession.segments.length === 0) && !hasActive) {
     renderTranscript();
@@ -546,24 +546,22 @@ export function updateActiveDraftTurn(caption: InterimCaption | null) {
   const emptyState = document.getElementById('empty-state');
   if (emptyState) emptyState.remove();
 
-  let activeEl = document.getElementById('active-draft-turn');
+  const existingActiveEls = listEl.querySelectorAll('.cr-active-turn');
+  existingActiveEls.forEach((el) => el.remove());
 
-  if (!hasActive || !activeDraft) {
-    if (activeEl) activeEl.remove();
+  if (!hasActive) {
     updateMetrics();
     return;
   }
 
   const baseTime = currentSession?.startTime || Date.now();
-  const timeStr = formatElapsed((activeDraft.timestamp || Date.now()) - baseTime);
   const scrollContainer = getScrollContainer(listEl);
   const wasNearBottom = isNearBottom(scrollContainer);
 
-  if (!activeEl) {
-    activeEl = createTurnElement(activeDraft.speaker, activeDraft.text, timeStr, undefined, true);
-    listEl.appendChild(activeEl);
-  } else {
-    populateTurnContent(activeEl, activeDraft.speaker, activeDraft.text, timeStr);
+  for (const draft of activeDrafts) {
+    const timeStr = formatElapsed((draft.timestamp || Date.now()) - baseTime);
+    const draftEl = createTurnElement(draft.speaker, draft.text, timeStr, draft.id, true);
+    listEl.appendChild(draftEl);
   }
 
   if (wasNearBottom) {
@@ -580,8 +578,8 @@ export function appendTurnElement(segment: TranscriptSegment): void {
   const emptyState = document.getElementById('empty-state');
   if (emptyState) emptyState.remove();
 
-  const activeEl = document.getElementById('active-draft-turn');
-  if (activeEl) activeEl.remove();
+  const activeEls = listEl.querySelectorAll('.cr-active-turn');
+  activeEls.forEach((el) => el.remove());
 
   const baseTime = currentSession?.startTime || Date.now();
   const timeStr = formatElapsed(segment.startTime - baseTime);
@@ -633,7 +631,7 @@ export function renderTranscript(forceScroll: boolean = false) {
   recalculateCachedMetrics();
 
   const segments = currentSession?.segments || [];
-  const hasActive = Boolean(activeDraft && currentStatus === 'recording');
+  const hasActive = Boolean(activeDrafts.length > 0 && currentStatus === 'recording');
 
   if (segments.length === 0 && !hasActive) {
     listEl.replaceChildren(
@@ -650,11 +648,13 @@ export function renderTranscript(forceScroll: boolean = false) {
     children.push(createTurnElement(seg.speaker, seg.text, timeStr, seg.id));
   }
 
-  if (hasActive && activeDraft) {
-    const timeStr = formatElapsed((activeDraft.timestamp || Date.now()) - baseTime);
-    children.push(
-      createTurnElement(activeDraft.speaker, activeDraft.text, timeStr, undefined, true)
-    );
+  if (hasActive) {
+    for (const draft of activeDrafts) {
+      const timeStr = formatElapsed((draft.timestamp || Date.now()) - baseTime);
+      children.push(
+        createTurnElement(draft.speaker, draft.text, timeStr, draft.id, true)
+      );
+    }
   }
 
   const scrollContainer = getScrollContainer(listEl);
@@ -679,11 +679,13 @@ export function updateMetrics() {
   let wordCount = cachedWordsCount;
   let turnsCount = segments.length;
 
-  if (activeDraft && currentStatus === 'recording') {
-    wordCount += countWords(activeDraft.text);
-    turnsCount += 1;
-    if (activeDraft.speaker && !cachedSpeakersSet.has(activeDraft.speaker)) {
-      speakers += 1;
+  if (activeDrafts.length > 0 && currentStatus === 'recording') {
+    for (const draft of activeDrafts) {
+      wordCount += countWords(draft.text);
+      turnsCount += 1;
+      if (draft.speaker && !cachedSpeakersSet.has(draft.speaker)) {
+        speakers += 1;
+      }
     }
   }
 
@@ -748,8 +750,7 @@ function listenToExtensionMessages() {
       type?: string;
       status?: RecordingStatus;
       segment?: TranscriptSegment;
-      activeDraft?: InterimCaption;
-      caption?: InterimCaption | null;
+      captions?: InterimCaption[];
     };
 
     if (msgEvent.type === 'CR_STATUS_CHANGE' && msgEvent.status) {
@@ -770,7 +771,7 @@ function listenToExtensionMessages() {
         };
       }
       currentSession.segments.push(msgEvent.segment);
-      activeDraft = null;
+      activeDrafts = [];
       appendTurnElement(msgEvent.segment);
       hideRecoveryBanner();
     } else if (msgEvent.type === 'CR_UPDATE_TURN' && msgEvent.segment) {
@@ -794,7 +795,7 @@ function listenToExtensionMessages() {
         updateTurnElement(msgEvent.segment);
       }
     } else if (msgEvent.type === 'CR_ACTIVE_CAPTION') {
-      updateActiveDraftTurn(msgEvent.caption || null);
+      updateActiveDraftTurn(msgEvent.captions || []);
     }
   });
 }
@@ -820,7 +821,7 @@ function listenToStorageChanges() {
       if (!newDraft) {
         if (currentStatus !== 'recording') {
           currentSession = null;
-          activeDraft = null;
+          activeDrafts = [];
           updateStatus('idle');
           renderTranscript();
           updateMetrics();

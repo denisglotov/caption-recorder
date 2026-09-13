@@ -8,7 +8,7 @@ export interface PlatformAdapter {
   observe(
     onCaption: (caption: InterimCaption) => void,
     onCaptionsStateChange?: (enabled: boolean) => void,
-    onActiveCaption?: (caption: InterimCaption | null) => void
+    onActiveCaption?: (captions: InterimCaption[]) => void
   ): void;
   stop(): void;
   flush?(): void;

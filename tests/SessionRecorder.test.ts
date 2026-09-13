@@ -351,6 +351,36 @@ describe('SessionRecorder Headless Coordinator', () => {
     recorder.destroy();
   });
 
+  it('receives active draft captions and broadcasts CR_ACTIVE_CAPTION message', async () => {
+    let onActiveCaptionCb: ((captions: InterimCaption[]) => void) | undefined;
+    mockAdapter.observe = vi.fn((_onFinalized, _onStateChange, onActive) => {
+      onActiveCaptionCb = onActive;
+    });
+
+    const recorder = new SessionRecorder(mockAdapter);
+    await recorder.restorePromise;
+
+    const drafts: InterimCaption[] = [
+      {
+        id: 'draft_1',
+        speaker: 'Denis',
+        text: 'Streaming sentence',
+        timestamp: 1000,
+        startTime: 1000,
+      },
+    ];
+
+    await onActiveCaptionCb!(drafts);
+
+    expect(recorder.getActiveDrafts()).toEqual(drafts);
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'CR_ACTIVE_CAPTION',
+      captions: drafts,
+    });
+
+    recorder.destroy();
+  });
+
   it('cleans up listeners and stops adapter on destroy', async () => {
     const recorder = new SessionRecorder(mockAdapter);
     await recorder.restorePromise;

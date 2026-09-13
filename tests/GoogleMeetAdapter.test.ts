@@ -86,12 +86,14 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
 
   it('streams the current unstable chunk via onActiveCaption in real-time before switching', () => {
     const emittedFinals: InterimCaption[] = [];
-    const activeDrafts: (InterimCaption | null)[] = [];
+    const pendingBatches: InterimCaption[][] = [];
 
     adapter.observe(
       (cap) => emittedFinals.push(cap),
       undefined,
-      (active) => activeDrafts.push(active)
+      (drafts) => {
+        pendingBatches.push(drafts);
+      }
     );
 
     const { textEl: chunk1 } = createMockCaptionElement('Hello', 'Denis');
@@ -100,9 +102,10 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     );
 
     // Initial unstable chunk
-    expect(activeDrafts.length).toBe(1);
-    expect(activeDrafts[0]?.speaker).toBe('Denis');
-    expect(activeDrafts[0]?.text).toBe('Hello');
+    expect(pendingBatches.length).toBe(1);
+    expect(pendingBatches[0].length).toBe(1);
+    expect(pendingBatches[0][0].speaker).toBe('Denis');
+    expect(pendingBatches[0][0].text).toBe('Hello');
     expect(emittedFinals.length).toBe(0);
 
     // Draft update in progress
@@ -111,18 +114,22 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
       chunk1
     );
 
-    expect(activeDrafts.length).toBe(2);
-    expect(activeDrafts[1]?.text).toBe('Hello world');
+    expect(pendingBatches.length).toBe(2);
+    expect(pendingBatches[1].length).toBe(1);
+    expect(pendingBatches[1][0].text).toBe('Hello world');
     expect(emittedFinals.length).toBe(0);
 
-    // Author switches to second chunk: both chunks 1 and 2 are pending
+    // Author switches to second chunk: both chunks 1 and 2 are pending as distinct items
     const { textEl: chunk2 } = createMockCaptionElement('Next sentence', 'Denis');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       chunk2
     );
 
     expect(emittedFinals.length).toBe(0);
-    expect(activeDrafts[activeDrafts.length - 1]?.text).toBe('Hello world Next sentence');
+    const batch2 = pendingBatches[pendingBatches.length - 1];
+    expect(batch2.length).toBe(2);
+    expect(batch2[0].text).toBe('Hello world');
+    expect(batch2[1].text).toBe('Next sentence');
 
     // Author reaches third chunk: third-from-last (chunk 1) is now finalized
     const { textEl: chunk3 } = createMockCaptionElement('Third sentence', 'Denis');
@@ -132,7 +139,10 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
 
     expect(emittedFinals.length).toBe(1);
     expect(emittedFinals[0].text).toBe('Hello world');
-    expect(activeDrafts[activeDrafts.length - 1]?.text).toBe('Next sentence Third sentence');
+    const batch3 = pendingBatches[pendingBatches.length - 1];
+    expect(batch3.length).toBe(2);
+    expect(batch3[0].text).toBe('Next sentence');
+    expect(batch3[1].text).toBe('Third sentence');
 
     // Flush finalizes remaining pending chunks
     adapter.flush();
@@ -463,12 +473,12 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
 
   it('tracks speech startTime on pending captions and preserves it when finalized', () => {
     const emitted: InterimCaption[] = [];
-    const activeDrafts: (InterimCaption | null)[] = [];
+    const activeDrafts: InterimCaption[][] = [];
 
     adapter.observe(
       (cap) => emitted.push(cap),
       undefined,
-      (active) => activeDrafts.push(active)
+      (drafts) => activeDrafts.push(drafts)
     );
 
     const { textEl } = createMockCaptionElement('Start of speech', 'Denis');
@@ -478,7 +488,7 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
       textEl
     );
 
-    expect(activeDrafts[0]?.startTime).toBe(10000);
+    expect(activeDrafts[0][0]?.startTime).toBe(10000);
 
     // Evolve draft 500ms later
     vi.setSystemTime(10500);
@@ -487,8 +497,8 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
       textEl
     );
 
-    expect(activeDrafts[1]?.startTime).toBe(10000);
-    expect(activeDrafts[1]?.timestamp).toBe(10500);
+    expect(activeDrafts[1][0]?.startTime).toBe(10000);
+    expect(activeDrafts[1][0]?.timestamp).toBe(10500);
 
     // Flush at 11000ms
     vi.setSystemTime(11000);
@@ -751,5 +761,48 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(
       emitted.some((c) => c.speaker === 'Alice' && c.text === 'Alice reaches third thought.')
     ).toBe(true);
+  });
+
+  it('does not re-emit or duplicate segments during repeated periodic scans when elements remain connected in DOM', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    const { textEl: e1 } = createMockCaptionElement('Sentence one.', 'You');
+    const { textEl: e2 } = createMockCaptionElement('Sentence two.', 'You');
+    const { textEl: e3 } = createMockCaptionElement('Sentence three.', 'You');
+    const { textEl: e4 } = createMockCaptionElement('Sentence four.', 'You');
+
+    // Process all 4 elements
+    const proc = (adapter as unknown as { processCaptionElement: (el: unknown) => void });
+    proc.processCaptionElement(e1);
+    proc.processCaptionElement(e2);
+    proc.processCaptionElement(e3); // e1 finalized
+    proc.processCaptionElement(e4); // e2 finalized
+
+    expect(emitted.length).toBe(2);
+    expect(emitted[0].text).toBe('Sentence one.');
+    expect(emitted[1].text).toBe('Sentence two.');
+
+    // Simulate 5 periodic scanner loops while all 4 elements remain connected in DOM
+    for (let i = 0; i < 5; i++) {
+      proc.processCaptionElement(e1);
+      proc.processCaptionElement(e2);
+      proc.processCaptionElement(e3);
+      proc.processCaptionElement(e4);
+    }
+
+    // Still exactly 2 emitted! No duplications!
+    expect(emitted.length).toBe(2);
+
+    // Disconnect elements and flush
+    e1.isConnected = false;
+    e2.isConnected = false;
+    e3.isConnected = false;
+    e4.isConnected = false;
+    adapter.flush();
+
+    expect(emitted.length).toBe(4);
+    expect(emitted[2].text).toBe('Sentence three.');
+    expect(emitted[3].text).toBe('Sentence four.');
   });
 });

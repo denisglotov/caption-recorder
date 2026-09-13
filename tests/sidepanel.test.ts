@@ -18,7 +18,7 @@ import {
   setupExportButtons,
   setCurrentSession,
   setCurrentStatus,
-  setActiveDraft,
+  setActiveDrafts,
   getScrollContainer,
   isNearBottom,
   scrollToBottom,
@@ -192,7 +192,7 @@ describe('sidepanel/main.ts UI & Logic', () => {
 
     setCurrentSession(null);
     setCurrentStatus('idle');
-    setActiveDraft(null);
+    setActiveDrafts([]);
   });
 
   describe('format helpers', () => {
@@ -291,18 +291,53 @@ describe('sidepanel/main.ts UI & Logic', () => {
       setCurrentSession(session);
       setCurrentStatus('recording');
 
-      updateActiveDraftTurn({
-        speaker: 'Denis',
-        text: 'Streaming interim speech',
-        timestamp: 1500,
-      });
+      updateActiveDraftTurn([
+        {
+          speaker: 'Denis',
+          text: 'Streaming interim speech',
+          timestamp: 1500,
+        },
+      ]);
 
       expect(domElements['transcript-list'].appendChild).toHaveBeenCalled();
       expect(domElements['val-turns'].textContent).toBe('1');
       expect(domElements['val-words'].textContent).toBe('3');
 
       // Clear draft when silence/finalized
-      updateActiveDraftTurn(null);
+      updateActiveDraftTurn([]);
+      expect(domElements['val-turns'].textContent).toBe('0');
+      expect(domElements['val-words'].textContent).toBe('0');
+    });
+
+    it('renders multiple distinct pending active drafts without concatenation', () => {
+      const session: MeetingSession = {
+        id: 's1',
+        title: 'Meeting',
+        startTime: 1000,
+        segments: [],
+        platform: 'google-meet',
+      };
+      setCurrentSession(session);
+      setCurrentStatus('recording');
+
+      const draft1 = {
+        speaker: 'Denis',
+        text: 'Pre-last sentence',
+        timestamp: 1500,
+      };
+      const draft2 = {
+        speaker: 'Denis',
+        text: 'Last sentence',
+        timestamp: 1600,
+      };
+
+      updateActiveDraftTurn([draft1, draft2]);
+
+      expect(domElements['val-turns'].textContent).toBe('2');
+      expect(domElements['val-words'].textContent).toBe('5');
+
+      // Clear drafts
+      updateActiveDraftTurn([]);
       expect(domElements['val-turns'].textContent).toBe('0');
       expect(domElements['val-words'].textContent).toBe('0');
     });
@@ -561,11 +596,13 @@ describe('sidepanel/main.ts UI & Logic', () => {
       setCurrentSession(session);
       setCurrentStatus('recording');
 
-      updateActiveDraftTurn({
-        speaker: 'Alice',
-        text: 'Live caption words...',
-        timestamp: 2500,
-      });
+      updateActiveDraftTurn([
+        {
+          speaker: 'Alice',
+          text: 'Live caption words...',
+          timestamp: 2500,
+        },
+      ]);
 
       expect(pane.scrollTop).toBe(pane.scrollHeight);
     });

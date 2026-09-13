@@ -14,7 +14,7 @@ export class SessionRecorder {
   private session: MeetingSession;
   private status: RecordingStatus = 'idle';
   private hasRecorded: boolean = false;
-  private activeDraft: InterimCaption | null = null;
+  private activeDrafts: InterimCaption[] = [];
   private isRestoring: boolean = true;
   public restorePromise: Promise<void> | null = null;
 
@@ -64,8 +64,8 @@ export class SessionRecorder {
     return this.status;
   }
 
-  public getActiveDraft(): InterimCaption | null {
-    return this.activeDraft;
+  public getActiveDrafts(): InterimCaption[] {
+    return this.activeDrafts;
   }
 
   private startObserving(): void {
@@ -145,20 +145,24 @@ export class SessionRecorder {
       (enabled) => {
         this.handleCaptionsStateChange(enabled);
       },
-      async (activeCaption) => {
+      async (activeCaptions: InterimCaption[] = []) => {
         if (this.restorePromise) {
           await this.restorePromise;
         }
 
-        this.activeDraft = activeCaption;
-        if (activeCaption && this.status !== 'recording' && this.adapter.isCaptionsEnabled()) {
+        this.activeDrafts = Array.isArray(activeCaptions) ? activeCaptions : [];
+        if (
+          this.activeDrafts.length > 0 &&
+          this.status !== 'recording' &&
+          this.adapter.isCaptionsEnabled()
+        ) {
           console.info('[SessionRecorder] Live draft detected, resuming recording session');
           this.resumeRecording();
         }
 
         this.sendMessage({
           type: 'CR_ACTIVE_CAPTION',
-          caption: activeCaption,
+          captions: this.activeDrafts,
         });
       }
     );
@@ -225,7 +229,7 @@ export class SessionRecorder {
 
     if (wasRecording) {
       this.adapter.flush?.();
-      this.activeDraft = null;
+      this.activeDrafts = [];
 
       if (this.session.segments.length > 0) {
         DraftStorageService.saveDraftImmediate(this.session);
@@ -258,10 +262,9 @@ export class SessionRecorder {
           segments: [...draft.segments],
           platform: draft.platform || this.adapter.platformId,
           savedAt: draft.savedAt,
-          url: draft.url || (typeof window !== 'undefined' ? window.location.href : undefined),
+          url: draft.url || this.session.url,
         };
-
-        this.hasRecorded = draft.segments.length > 0 || Boolean(draft.startTime);
+        this.hasRecorded = draft.segments.length > 0;
       }
     } catch (err) {
       console.warn('[SessionRecorder] Failed to restore draft session', err);
@@ -296,7 +299,7 @@ export class SessionRecorder {
     };
 
     this.hasRecorded = false;
-    this.activeDraft = null;
+    this.activeDrafts = [];
 
     const isEnabled = this.adapter.isCaptionsEnabled();
     if (isEnabled) {
@@ -319,7 +322,7 @@ export class SessionRecorder {
       }
       this.sendMessage({ type: 'CR_STATUS_CHANGE', status: 'idle' });
     } catch {
-      // Silently ignore unload errors if context invalidated
+      // Ignored during page destruction
     }
   }
 
@@ -353,7 +356,7 @@ export class SessionRecorder {
           sendResponse({
             status: this.status,
             session: this.session,
-            activeDraft: this.activeDraft,
+            activeDrafts: this.activeDrafts,
           });
           return true;
         }

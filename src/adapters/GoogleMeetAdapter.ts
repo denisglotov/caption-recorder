@@ -6,6 +6,7 @@ interface ChunkInfo {
   el: HTMLElement;
   text: string;
   startTime: number;
+  finalized: boolean;
 }
 
 interface SpeakerState {
@@ -23,7 +24,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private onCaptionCallback: ((caption: InterimCaption) => void) | null = null;
   private onCaptionsStateChangeCallback: ((enabled: boolean) => void) | null = null;
-  private onActiveCaptionCallback: ((caption: InterimCaption | null) => void) | null = null;
+  private onActiveCaptionCallback: ((captions: InterimCaption[]) => void) | null = null;
   private lastKnownCaptionsEnabled: boolean = false;
 
   // 3-chunk sliding window state per speaker:
@@ -49,42 +50,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     '[jsname="WqqAi"]',
     '.zs7Du',
     '.poVWob',
-  ];
-
-  // Exclude non-caption UI containers from caption extraction
-  private static readonly EXCLUDE_SELECTORS = [
-    '[role="dialog"]',
-    '[role="menu"]',
-    '[role="menubar"]',
-    '[role="listbox"]',
-    '[role="toolbar"]',
-    '[role="button"]',
-    '[role="tooltip"]',
-    '[data-tooltip]',
-    '[aria-modal="true"]',
-    'button',
-    'input',
-    'textarea',
-    'select',
-    '[contenteditable]',
-    'nav',
-    'header',
-    'footer',
-    '.VfPpkd-Bz112c-LgbsSe',
-  ];
-
-  private static readonly EXCLUDE_SELECTOR_STRING = GoogleMeetAdapter.EXCLUDE_SELECTORS.join(', ');
-
-  // Material Icon ligature names occasionally rendered as raw text
-  private static readonly ICON_FONT_LIGATURES = [
-    'arrow_drop_down',
-    'more_vert',
-    'mic',
-    'mic_off',
-    'videocam',
-    'videocam_off',
-    'close',
-    'check',
   ];
 
   public matchesUrl(url: string): boolean {
@@ -188,9 +153,8 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     );
     for (let i = 0; i < textEls.length; i++) {
       const el = textEls[i];
-      if (this.isExcluded(el)) continue;
       const text = el.textContent?.trim() || '';
-      if (this.isValidCaptionText(text)) {
+      if (text.length > 0) {
         if (typeof el.offsetWidth === 'number' && typeof el.offsetHeight === 'number') {
           if (el.offsetWidth > 0 || el.offsetHeight > 0) {
             return true;
@@ -225,7 +189,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   public observe(
     onCaption: (caption: InterimCaption) => void,
     onCaptionsStateChange?: (enabled: boolean) => void,
-    onActiveCaption?: (caption: InterimCaption | null) => void
+    onActiveCaption?: (captions: InterimCaption[]) => void
   ): void {
     this.stop();
 
@@ -288,7 +252,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       delete (window as unknown as Record<string, unknown>).__crDebug;
     }
     this.flush();
-    this.onActiveCaptionCallback?.(null);
+    this.onActiveCaptionCallback?.([]);
     this.speakerStates.clear();
     this.lastEmittedText = '';
     this.lastEmittedSpeaker = '';
@@ -299,9 +263,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!speakerState) return;
 
     const now = Date.now();
-    const N = speakerState.activeChunks.length;
-    const pendingStartIndex = Math.max(0, N - 2);
-    const unfinalized = speakerState.activeChunks.slice(pendingStartIndex);
+    const unfinalized = speakerState.activeChunks.filter((c) => !c.finalized);
 
     for (const chunk of unfinalized) {
       const cleanText = chunk.text.trim();
@@ -317,13 +279,19 @@ export class GoogleMeetAdapter implements PlatformAdapter {
           timestamp: now,
         });
       }
+      chunk.finalized = true;
     }
 
-    speakerState.activeChunks = [];
+    speakerState.activeChunks = speakerState.activeChunks.filter((c) =>
+      this.isElementConnected(c.el)
+    );
+    if (speakerState.activeChunks.length === 0) {
+      this.speakerStates.delete(speaker);
+    }
   }
 
   public flush(): void {
-    this.onActiveCaptionCallback?.(null);
+    this.onActiveCaptionCallback?.([]);
     for (const speaker of Array.from(this.speakerStates.keys())) {
       this.flushSpeaker(speaker);
     }
@@ -353,11 +321,11 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
 
     for (const [speaker, state] of Array.from(this.speakerStates.entries())) {
-      if (state.activeChunks.length > 0) {
-        const latestChunk = state.activeChunks[state.activeChunks.length - 1];
-        if (!this.isElementConnected(latestChunk.el)) {
-          this.flushSpeaker(speaker);
-        }
+      if (
+        state.activeChunks.length > 0 &&
+        state.activeChunks.every((c) => !this.isElementConnected(c.el))
+      ) {
+        this.flushSpeaker(speaker);
       }
     }
 
@@ -366,7 +334,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       const el =
         target.nodeType === Node.ELEMENT_NODE ? (target as HTMLElement) : target.parentElement;
 
-      if (!el || this.isExcluded(el)) continue;
+      if (!el) continue;
 
       const textEl = el.closest<HTMLElement>(GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING);
       if (textEl) {
@@ -386,11 +354,11 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.onCaptionCallback) return;
 
     for (const [speaker, state] of Array.from(this.speakerStates.entries())) {
-      if (state.activeChunks.length > 0) {
-        const latestChunk = state.activeChunks[state.activeChunks.length - 1];
-        if (!this.isElementConnected(latestChunk.el)) {
-          this.flushSpeaker(speaker);
-        }
+      if (
+        state.activeChunks.length > 0 &&
+        state.activeChunks.every((c) => !this.isElementConnected(c.el))
+      ) {
+        this.flushSpeaker(speaker);
       }
     }
 
@@ -399,14 +367,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     );
 
     if (textEls.length === 0) {
-      let hasActive = false;
+      let hasUnfinalized = false;
       for (const state of this.speakerStates.values()) {
-        if (state.activeChunks.length > 0) {
-          hasActive = true;
+        if (state.activeChunks.some((c) => !c.finalized)) {
+          hasUnfinalized = true;
           break;
         }
       }
-      if (hasActive) {
+      if (hasUnfinalized) {
         this.flush();
       }
       return;
@@ -415,14 +383,12 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     const presentSpeakers = new Set<string>();
     for (let i = 0; i < textEls.length; i++) {
       const el = textEls[i];
-      if (!this.isExcluded(el)) {
-        const sp = this.extractSpeakerForTextElement(el).trim() || 'Speaker';
-        presentSpeakers.add(sp);
-        this.processCaptionElement(el);
-      }
+      const sp = this.extractSpeakerForTextElement(el).trim() || 'Speaker';
+      presentSpeakers.add(sp);
+      this.processCaptionElement(el);
     }
 
-    for (const [speaker, state] of this.speakerStates.entries()) {
+    for (const [speaker, state] of Array.from(this.speakerStates.entries())) {
       if (state.activeChunks.length > 0 && !presentSpeakers.has(speaker)) {
         this.flushSpeaker(speaker);
       }
@@ -434,10 +400,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   }
 
   private processCaptionElement(textEl: HTMLElement): void {
-    if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
+    if (!this.onCaptionCallback) return;
 
     const text = textEl.textContent?.trim() || '';
-    if (!this.isValidCaptionText(text)) return;
+    if (!text) return;
 
     const speaker = this.extractSpeakerForTextElement(textEl).trim() || 'Speaker';
 
@@ -454,61 +420,96 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       this.speakerStates.set(speaker, speakerState);
     }
 
-    const existingIndex = speakerState.activeChunks.findIndex((c) => c.el === textEl);
-    if (existingIndex >= 0) {
-      speakerState.activeChunks[existingIndex].text = text;
+    // Clean up any disconnected elements
+    speakerState.activeChunks = speakerState.activeChunks.filter((c) =>
+      this.isElementConnected(c.el)
+    );
+
+    const existingChunk = speakerState.activeChunks.find((c) => c.el === textEl);
+    if (existingChunk) {
+      const cleanText = text.trim();
+      if (existingChunk.finalized) {
+        if (cleanText === existingChunk.text) {
+          return;
+        }
+
+        const isExtension =
+          cleanText.startsWith(existingChunk.text) ||
+          existingChunk.text.startsWith(cleanText);
+        const hasActiveChunks = speakerState.activeChunks.some((c) => !c.finalized);
+
+        if (isExtension || hasActiveChunks) {
+          existingChunk.text = cleanText;
+          speakerState.lastFinalizedText = cleanText;
+          this.lastEmittedSpeaker = speaker;
+          this.lastEmittedText = cleanText;
+          this.onCaptionCallback?.({
+            id: existingChunk.id,
+            speaker,
+            text: cleanText,
+            startTime: existingChunk.startTime,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+
+        // Container reused for a brand new sentence
+        const now = Date.now();
+        existingChunk.id = this.generateTurnId(now);
+        existingChunk.text = cleanText;
+        existingChunk.startTime = now;
+        existingChunk.finalized = false;
+      } else {
+        existingChunk.text = cleanText;
+      }
     } else {
       const now = Date.now();
       speakerState.activeChunks.push({
         id: this.generateTurnId(now),
         el: textEl,
-        text,
+        text: text.trim(),
         startTime: now,
+        finalized: false,
       });
     }
 
-    const N = speakerState.activeChunks.length;
     // 3-chunk sliding window:
-    // If N >= 3, the third-from-last chunk (index N - 3) is finalized
-    if (N >= 3) {
-      const finalizeCandidate = speakerState.activeChunks[N - 3];
-      const cleanFinalizeText = finalizeCandidate.text.trim();
-      if (cleanFinalizeText && cleanFinalizeText !== speakerState.lastFinalizedText) {
-        speakerState.lastFinalizedText = cleanFinalizeText;
-        this.lastEmittedSpeaker = speaker;
-        this.lastEmittedText = cleanFinalizeText;
-        this.onCaptionCallback?.({
-          id: finalizeCandidate.id,
-          speaker,
-          text: cleanFinalizeText,
-          startTime: finalizeCandidate.startTime,
-          timestamp: Date.now(),
-        });
-      }
-
-      if (N > 3) {
-        speakerState.activeChunks = speakerState.activeChunks.slice(-3);
+    // If there are >= 3 unfinalized chunks, finalize older unfinalized chunks so only 2 remain pending
+    const unfinalized = speakerState.activeChunks.filter((c) => !c.finalized);
+    const U = unfinalized.length;
+    if (U >= 3) {
+      const toFinalize = unfinalized.slice(0, U - 2);
+      for (const candidate of toFinalize) {
+        const cleanFinalizeText = candidate.text.trim();
+        if (cleanFinalizeText && cleanFinalizeText !== speakerState.lastFinalizedText) {
+          speakerState.lastFinalizedText = cleanFinalizeText;
+          this.lastEmittedSpeaker = speaker;
+          this.lastEmittedText = cleanFinalizeText;
+          this.onCaptionCallback?.({
+            id: candidate.id,
+            speaker,
+            text: cleanFinalizeText,
+            startTime: candidate.startTime,
+            timestamp: Date.now(),
+          });
+        }
+        candidate.finalized = true;
       }
     }
 
-    // Active draft ticker: combine pending chunks (last and second-from-last)
-    const activeN = speakerState.activeChunks.length;
-    const pendingStartIndex = Math.max(0, activeN - 2);
-    const pendingChunks = speakerState.activeChunks.slice(pendingStartIndex);
-    const combinedPendingText = pendingChunks
-      .map((c) => c.text.trim())
-      .filter(Boolean)
-      .join(' ');
-
-    if (combinedPendingText && pendingChunks.length > 0) {
-      this.onActiveCaptionCallback?.({
-        id: pendingChunks[0].id,
+    // Active drafts: emit unfinalized chunks (last and second-from-last pending chunks)
+    const pendingChunks = speakerState.activeChunks.filter((c) => !c.finalized);
+    const activeDrafts: InterimCaption[] = pendingChunks
+      .filter((c) => c.text.trim().length > 0)
+      .map((c) => ({
+        id: c.id,
         speaker,
-        text: combinedPendingText,
-        startTime: pendingChunks[0].startTime,
+        text: c.text.trim(),
+        startTime: c.startTime,
         timestamp: Date.now(),
-      });
-    }
+      }));
+
+    this.onActiveCaptionCallback?.(activeDrafts);
   }
 
   private extractSpeakerForTextElement(textEl: HTMLElement): string {
@@ -532,21 +533,6 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
 
     return 'Speaker';
-  }
-
-  private isValidCaptionText(text: string): boolean {
-    if (!text || text.length === 0) return false;
-
-    if (GoogleMeetAdapter.ICON_FONT_LIGATURES.includes(text.toLowerCase())) {
-      return false;
-    }
-
-    return true;
-  }
-
-  private isExcluded(el: HTMLElement): boolean {
-    if (!el) return true;
-    return Boolean(el.closest(GoogleMeetAdapter.EXCLUDE_SELECTOR_STRING));
   }
 
   private checkCaptionsState(): void {
@@ -587,6 +573,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       activeCaptionElements: textEls,
       speakers: speakerSummaries,
       lastEmittedText: this.lastEmittedText,
+      lastEmittedSpeaker: this.lastEmittedSpeaker,
     };
 
     console.info('[CaptionRecorder Diagnostics]', result);
