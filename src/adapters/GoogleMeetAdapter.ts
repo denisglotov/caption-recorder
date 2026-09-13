@@ -9,6 +9,15 @@ interface ElementTurnInfo {
   emitted: boolean;
 }
 
+interface PendingCaptionInfo {
+  id: string;
+  speaker: string;
+  el: HTMLElement;
+  trackKey: HTMLElement;
+  text: string;
+  startTime: number;
+}
+
 export class GoogleMeetAdapter implements PlatformAdapter {
   public static readonly matchPatterns: readonly string[] = ['https://meet.google.com/*'];
 
@@ -22,15 +31,8 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private onActiveCaptionCallback: ((caption: InterimCaption | null) => void) | null = null;
   private lastKnownCaptionsEnabled: boolean = false;
 
-  // Active chunk tracking for author-based switching
-  private pendingCaption: {
-    id: string;
-    speaker: string;
-    el: HTMLElement;
-    trackKey: HTMLElement;
-    text: string;
-    startTime: number;
-  } | null = null;
+  // Active chunk tracking for author-based switching supporting N concurrent speakers
+  private pendingCaptions = new Map<string, PendingCaptionInfo>();
   private elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
   private lastEmittedText: string = '';
   private lastEmittedSpeaker: string = '';
@@ -259,7 +261,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     // 2. 300ms scanner loop as resilient fallback
     this.pollInterval = setInterval(() => {
       this.checkCaptionsState();
-      if (this.isCaptionsEnabled()) {
+      if (this.lastKnownCaptionsEnabled) {
         this.scanActiveCaptions();
       }
     }, 300);
@@ -292,19 +294,19 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     }
     this.flush();
     this.onActiveCaptionCallback?.(null);
-    this.pendingCaption = null;
+    this.pendingCaptions.clear();
     this.lastEmittedText = '';
     this.lastEmittedSpeaker = '';
     this.elementTurns = new WeakMap<HTMLElement, ElementTurnInfo>();
   }
 
-  public flush(): void {
-    if (!this.pendingCaption) return;
+  public flushSpeaker(speaker: string): void {
+    const pending = this.pendingCaptions.get(speaker);
+    if (!pending) return;
 
-    this.onActiveCaptionCallback?.(null);
-    const { id, speaker, trackKey, text, startTime } = this.pendingCaption;
-    this.pendingCaption = null;
+    this.pendingCaptions.delete(speaker);
 
+    const { id, trackKey, text, startTime } = pending;
     const cleanText = text.trim();
     if (!cleanText || (speaker === this.lastEmittedSpeaker && cleanText === this.lastEmittedText)) {
       if (trackKey) {
@@ -335,6 +337,13 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     });
   }
 
+  public flush(): void {
+    this.onActiveCaptionCallback?.(null);
+    for (const speaker of Array.from(this.pendingCaptions.keys())) {
+      this.flushSpeaker(speaker);
+    }
+  }
+
   private isElementConnected(el?: HTMLElement): boolean {
     if (!el) return false;
     if (typeof el.isConnected === 'boolean') {
@@ -358,8 +367,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       return;
     }
 
-    if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
-      this.flush();
+    for (const [speaker, pending] of Array.from(this.pendingCaptions.entries())) {
+      if (!this.isElementConnected(pending.el)) {
+        this.flushSpeaker(speaker);
+      }
     }
 
     for (const mutation of mutations) {
@@ -386,22 +397,17 @@ export class GoogleMeetAdapter implements PlatformAdapter {
   private scanActiveCaptions(): void {
     if (!this.onCaptionCallback) return;
 
-    if (!this.isCaptionsEnabled()) {
-      if (this.pendingCaption) {
-        this.flush();
+    for (const [speaker, pending] of Array.from(this.pendingCaptions.entries())) {
+      if (!this.isElementConnected(pending.el)) {
+        this.flushSpeaker(speaker);
       }
-      return;
-    }
-
-    if (this.pendingCaption && !this.isElementConnected(this.pendingCaption.el)) {
-      this.flush();
     }
 
     const textEls = document.querySelectorAll<HTMLElement>(
       GoogleMeetAdapter.CAPTION_TEXT_SELECTOR_STRING
     );
 
-    if (textEls.length === 0 && this.pendingCaption) {
+    if (textEls.length === 0 && this.pendingCaptions.size > 0) {
       this.flush();
       return;
     }
@@ -430,6 +436,42 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     return `seg_${startTime}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  private isSameTurnRevisionOrExtension(oldText: string, newText: string): boolean {
+    const o = oldText.trim();
+    const n = newText.trim();
+    if (!o || !n) return false;
+    if (o === n) return true;
+
+    // Direct extension or truncation
+    if (n.startsWith(o) || o.startsWith(n)) return true;
+
+    // Space-delimited word prefix overlap
+    const oWords = o.toLowerCase().split(/\s+/);
+    const nWords = n.toLowerCase().split(/\s+/);
+    if (oWords.length > 0 && nWords.length > 0) {
+      let commonPrefixLen = 0;
+      const minLen = Math.min(oWords.length, nWords.length);
+      while (commonPrefixLen < minLen && oWords[commonPrefixLen] === nWords[commonPrefixLen]) {
+        commonPrefixLen++;
+      }
+      if (commonPrefixLen >= 2 || commonPrefixLen / Math.max(oWords.length, nWords.length) >= 0.3) {
+        return true;
+      }
+    }
+
+    // Character-level prefix overlap (especially for CJK languages without spaces)
+    let charPrefix = 0;
+    const minChars = Math.min(o.length, n.length);
+    while (charPrefix < minChars && o[charPrefix] === n[charPrefix]) {
+      charPrefix++;
+    }
+    if (charPrefix >= 4 || charPrefix / Math.max(o.length, n.length) >= 0.3) {
+      return true;
+    }
+
+    return false;
+  }
+
   private processCaptionElement(textEl: HTMLElement): void {
     if (!this.onCaptionCallback || this.isExcluded(textEl)) return;
 
@@ -437,10 +479,18 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     if (!this.isValidCaptionText(text)) return;
 
     const speaker = this.extractSpeakerForTextElement(textEl);
+    const speakerKey = speaker.trim() || 'Speaker';
     const trackKey = this.getCaptionTrackKey(textEl);
 
     const existingTurn = this.elementTurns.get(trackKey);
     const now = Date.now();
+
+    // Fast check: If this container was previously pending for a different speaker, flush that speaker:
+    for (const [sKey, p] of this.pendingCaptions.entries()) {
+      if (p.trackKey === trackKey && sKey !== speakerKey) {
+        this.flushSpeaker(sKey);
+      }
+    }
 
     // Case 1: The turn for this element was already emitted as a segment.
     if (existingTurn?.emitted) {
@@ -449,12 +499,17 @@ export class GoogleMeetAdapter implements PlatformAdapter {
         return;
       }
 
-      // Speech recognition revised/translated an earlier phrase in the DOM: update in-place
-      // only if it is the same speaker and within a recent revision window (within 15s).
-      const isRecentSameSpeakerRevision =
-        existingTurn.speaker === speaker && now - existingTurn.startTime < 15000;
+      // Check if this is an in-place extension or revision for the same speaker.
+      // An update is considered an in-place revision if:
+      // 1. Same speaker
+      // 2. Either within the 15s tentative ASR window, OR new text is an extension/revision of existing text.
+      const isSameSpeaker = existingTurn.speaker === speaker;
+      const isRecentOrExtension =
+        isSameSpeaker &&
+        (now - existingTurn.startTime < 15000 ||
+          this.isSameTurnRevisionOrExtension(existingTurn.text, text));
 
-      if (isRecentSameSpeakerRevision) {
+      if (isRecentOrExtension) {
         existingTurn.text = text;
         existingTurn.speaker = speaker;
         this.lastEmittedSpeaker = speaker;
@@ -470,7 +525,7 @@ export class GoogleMeetAdapter implements PlatformAdapter {
         return;
       }
 
-      // Container reused for a different speaker or a new utterance after a gap:
+      // Container reused for a different speaker or a completely disjoint new utterance after a gap:
       // discard the old emitted turn mapping so a new turn is created.
       this.elementTurns.delete(trackKey);
     }
@@ -488,29 +543,32 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       return;
     }
 
+    const pending = this.pendingCaptions.get(speakerKey);
+
     // Case 3: Same chunk element and same speaker: update current speech draft
-    if (
-      this.pendingCaption &&
-      this.pendingCaption.trackKey === trackKey &&
-      this.pendingCaption.speaker === speaker
-    ) {
-      this.pendingCaption.text = text;
+    if (pending && pending.trackKey === trackKey) {
+      pending.text = text;
+      pending.el = textEl;
       const activeTurn = this.elementTurns.get(trackKey);
       if (activeTurn) {
         activeTurn.text = text;
       }
       this.onActiveCaptionCallback?.({
-        id: this.pendingCaption.id,
+        id: pending.id,
         speaker: speaker.trim() || 'Speaker',
         text,
-        startTime: this.pendingCaption.startTime,
+        startTime: pending.startTime,
         timestamp: Date.now(),
       });
       return;
     }
 
-    // Case 4: Chunk element or author switched: finalize previous chunk immediately
-    this.flush();
+    // Case 4: Chunk element switched for THIS author:
+    // Finalize THIS author's previous chunk immediately.
+    // NOTE: This does NOT finalize any other active speaker's pending chunk!
+    if (pending && pending.trackKey !== trackKey) {
+      this.flushSpeaker(speakerKey);
+    }
 
     const activeTurn = this.elementTurns.get(trackKey);
     const turnId = activeTurn && !activeTurn.emitted ? activeTurn.id : this.generateTurnId(now);
@@ -523,14 +581,14 @@ export class GoogleMeetAdapter implements PlatformAdapter {
     };
     this.elementTurns.set(trackKey, turnInfo);
 
-    this.pendingCaption = {
+    this.pendingCaptions.set(speakerKey, {
       id: turnId,
       speaker,
       el: textEl,
       trackKey,
       text,
       startTime: turnInfo.startTime,
-    };
+    });
     this.onActiveCaptionCallback?.({
       id: turnId,
       speaker: speaker.trim() || 'Speaker',
@@ -603,9 +661,10 @@ export class GoogleMeetAdapter implements PlatformAdapter {
       isCaptionsEnabled: this.isCaptionsEnabled(),
       activeCaptionElementsCount: textEls.length,
       activeCaptionElements: textEls,
-      pendingCaption: this.pendingCaption
-        ? { speaker: this.pendingCaption.speaker, text: this.pendingCaption.text }
-        : null,
+      pendingCaptions: Array.from(this.pendingCaptions.values()).map((p) => ({
+        speaker: p.speaker,
+        text: p.text,
+      })),
       lastEmittedText: this.lastEmittedText,
     };
 

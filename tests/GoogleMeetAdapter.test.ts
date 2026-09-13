@@ -166,7 +166,7 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted[1].text).toBe('Second sentence spoken.');
   });
 
-  it('flushes pending caption immediately when speaker changes', () => {
+  it('supports N concurrent speakers without prematurely finalizing one speaker when another speaks', () => {
     const emitted: InterimCaption[] = [];
     adapter.observe((cap) => emitted.push(cap));
 
@@ -177,22 +177,31 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     );
     expect(emitted.length).toBe(0);
 
-    // Speaker 2: Bob starts speaking
+    // Speaker 2: Bob starts speaking concurrently
     const { textEl: text2 } = createMockCaptionElement('Speaking second', 'Bob');
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
       text2
     );
 
-    // Speaker 1 should be immediately flushed with 0ms delay
+    // Speaker 1 is NOT prematurely flushed; both You and Bob are concurrently pending
+    expect(emitted.length).toBe(0);
+
+    // Speaker 1 speaks a new chunk div
+    const { textEl: text3 } = createMockCaptionElement('Speaking third', 'You');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      text3
+    );
+
+    // Speaker 1's previous chunk is now finalized, while Bob remains pending
     expect(emitted.length).toBe(1);
     expect(emitted[0].speaker).toBe('You');
     expect(emitted[0].text).toBe('Speaking first');
 
-    // Flush on stop/pause captures Bob
+    // Flush on stop/pause captures Bob and You's latest chunk
     adapter.flush();
-    expect(emitted.length).toBe(2);
-    expect(emitted[1].speaker).toBe('Bob');
-    expect(emitted[1].text).toBe('Speaking second');
+    expect(emitted.length).toBe(3);
+    expect(emitted.some((c) => c.speaker === 'Bob' && c.text === 'Speaking second')).toBe(true);
+    expect(emitted.some((c) => c.speaker === 'You' && c.text === 'Speaking third')).toBe(true);
   });
 
   it('does not re-emit unchanged lingering captions while element remains in DOM', () => {
@@ -574,7 +583,7 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted.length).toBe(1);
     const firstTurnId = emitted[0].id;
 
-    // 20 seconds later, same container is updated with a new sentence
+    // 20 seconds later, same container is updated with a completely disjoint new sentence
     vi.setSystemTime(120000);
     textEl.textContent = 'Second sentence spoken 20 seconds later.';
     (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
@@ -585,5 +594,121 @@ describe('GoogleMeetAdapter Author Chunk Switching', () => {
     expect(emitted.length).toBe(2);
     expect(emitted[1].id).not.toBe(firstTurnId);
     expect(emitted[1].text).toBe('Second sentence spoken 20 seconds later.');
+  });
+
+  it('updates turn in-place when a long monologue (>15s) is extended with trailing words', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    vi.setSystemTime(100000);
+    const { textEl } = createMockCaptionElement('Initial monologue section.', 'Alice');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(1);
+    const firstTurnId = emitted[0].id;
+
+    // 35 seconds later (> 15s limit), trailing words are added to the existing speech container
+    vi.setSystemTime(135000);
+    textEl.textContent = 'Initial monologue section. Extended with more thoughts 35s later.';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+
+    // Should update in-place with the same ID, NOT create a duplicate turn
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].id).toBe(firstTurnId);
+    expect(emitted[1].speaker).toBe('Alice');
+    expect(emitted[1].text).toBe(
+      'Initial monologue section. Extended with more thoughts 35s later.'
+    );
+  });
+
+  it('updates turn in-place when ASR refines words on a long turn after 15s', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    vi.setSystemTime(100000);
+    const { textEl } = createMockCaptionElement(
+      'Тогда я хотел прям по быстренько пройтись реклама в играх оплата их.',
+      'You'
+    );
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+    adapter.flush();
+
+    expect(emitted.length).toBe(1);
+    const firstTurnId = emitted[0].id;
+
+    // 40 seconds later, Meet ASR refines the ending of the sentence
+    vi.setSystemTime(140000);
+    textEl.textContent =
+      'Тогда я хотел прям по быстренько пройтись реклама в играх и оплаты. Я может';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      textEl
+    );
+
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].id).toBe(firstTurnId);
+    expect(emitted[1].text).toBe(
+      'Тогда я хотел прям по быстренько пройтись реклама в играх и оплаты. Я может'
+    );
+  });
+
+  it('handles multi-speaker interjections without duplicating speech turns', () => {
+    const emitted: InterimCaption[] = [];
+    adapter.observe((cap) => emitted.push(cap));
+
+    vi.setSystemTime(100000);
+    const { textEl: aliceEl } = createMockCaptionElement(
+      'Alice begins speaking her thought.',
+      'Alice'
+    );
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      aliceEl
+    );
+
+    // Bob interjects concurrently
+    vi.setSystemTime(102000);
+    const { textEl: bobEl } = createMockCaptionElement('Quick interjection.', 'Bob');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      bobEl
+    );
+
+    // Both Alice and Bob are concurrently pending; Alice is NOT prematurely flushed
+    expect(emitted.length).toBe(0);
+
+    // Alice continues her thought in her container (extended text)
+    vi.setSystemTime(104000);
+    aliceEl.textContent = 'Alice begins speaking her thought. And here is the conclusion.';
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      aliceEl
+    );
+
+    // Still pending without premature flush
+    expect(emitted.length).toBe(0);
+
+    // Alice starts a new chunk
+    vi.setSystemTime(106000);
+    const { textEl: aliceEl2 } = createMockCaptionElement('Alice begins next thought.', 'Alice');
+    (adapter as unknown as { processCaptionElement: (el: unknown) => void }).processCaptionElement(
+      aliceEl2
+    );
+
+    // Alice's first thought is finalized; Bob remains pending
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].speaker).toBe('Alice');
+    expect(emitted[0].text).toBe('Alice begins speaking her thought. And here is the conclusion.');
+
+    // Bob's speech and Alice's second thought are finalized on flush
+    adapter.flush();
+    expect(emitted.length).toBe(3);
+    expect(emitted.some((c) => c.speaker === 'Bob' && c.text === 'Quick interjection.')).toBe(true);
+    expect(
+      emitted.some((c) => c.speaker === 'Alice' && c.text === 'Alice begins next thought.')
+    ).toBe(true);
   });
 });

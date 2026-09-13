@@ -35,8 +35,9 @@ respect your resources:
   machine. Zero cloud services, zero external API keys.
 - **⚡ Switch-Driven Caption Finalization**: Live speech captions revise words in real time.
   CaptionRecorder streams intermediate speech to the Side Panel while tracking author chunk
-  containers in the DOM, deterministically finalizing turns when speakers pause, switch chunks, or
-  change without stutter or duplicate sentences.
+  containers in the DOM, deterministically finalizing turns when speakers pause or change.
+  Seamlessly reconciles overlapping speakers, long monologues, and late ASR phrase revisions without
+  duplicate sentences.
 - **🧩 Multi-Platform Adapter Architecture**: Decoupled `PlatformAdapter` interface.
   - **Google Meet** (`meet.google.com`) active now.
   - **Zoom Web** (`app.zoom.us/wc/*`) & **Microsoft Teams Web** (`teams.microsoft.com/*`) scheduled
@@ -67,10 +68,6 @@ respect your resources:
 ### Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/your-username/caption-recorder.git
-cd caption-recorder
-
 # Install dependencies
 npm install
 ```

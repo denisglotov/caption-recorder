@@ -363,4 +363,90 @@ describe('SessionRecorder Headless Coordinator', () => {
     expect(browser.runtime.onMessage.removeListener).toHaveBeenCalled();
     expect(mockAdapter.stop).toHaveBeenCalledTimes(1);
   });
+
+  it('merges incoming turn into last segment in-place when incoming text extends the same speaker turn', async () => {
+    let onFinalizedCb: ((caption: InterimCaption) => void) | undefined;
+    mockAdapter.observe = vi.fn((onFinalized) => {
+      onFinalizedCb = onFinalized;
+    });
+
+    const recorder = new SessionRecorder(mockAdapter);
+    await recorder.restorePromise;
+
+    // Turn 1
+    await onFinalizedCb!({
+      id: 'turn_1',
+      speaker: 'Denis',
+      text: 'First sentence part 1.',
+      timestamp: 1000000,
+      startTime: 1000000,
+    });
+
+    expect(recorder.getSession().segments.length).toBe(1);
+
+    // Incoming turn with DIFFERENT ID, but extending the same speaker's text
+    await onFinalizedCb!({
+      id: 'turn_2_new_id',
+      speaker: 'Denis',
+      text: 'First sentence part 1. Extended with part 2.',
+      timestamp: 1000020,
+      startTime: 1000000,
+    });
+
+    // Defense-in-depth: Should NOT append turn_2 as a second segment, but update in-place
+    const session = recorder.getSession();
+    expect(session.segments.length).toBe(1);
+    expect(session.segments[0].text).toBe('First sentence part 1. Extended with part 2.');
+    expect(session.segments[0].endTime).toBe(1000020);
+
+    const updateMsg = sentMessages.find(
+      (m) =>
+        (m as { type?: string; segment?: { text?: string } }).type === 'CR_UPDATE_TURN' &&
+        (m as { segment?: { text?: string } }).segment?.text ===
+          'First sentence part 1. Extended with part 2.'
+    );
+    expect(updateMsg).toBeDefined();
+
+    recorder.destroy();
+  });
+
+  it('ignores exact duplicate segment and shorter substring for same speaker', async () => {
+    let onFinalizedCb: ((caption: InterimCaption) => void) | undefined;
+    mockAdapter.observe = vi.fn((onFinalized) => {
+      onFinalizedCb = onFinalized;
+    });
+
+    const recorder = new SessionRecorder(mockAdapter);
+    await recorder.restorePromise;
+
+    await onFinalizedCb!({
+      id: 'turn_full',
+      speaker: 'Denis',
+      text: 'Full complete speech text.',
+      timestamp: 1000000,
+    });
+
+    expect(recorder.getSession().segments.length).toBe(1);
+
+    // Exact duplicate with different ID
+    await onFinalizedCb!({
+      id: 'turn_dup',
+      speaker: 'Denis',
+      text: 'Full complete speech text.',
+      timestamp: 1000010,
+    });
+
+    expect(recorder.getSession().segments.length).toBe(1);
+
+    // Shorter prefix with different ID
+    await onFinalizedCb!({
+      id: 'turn_shorter',
+      speaker: 'Denis',
+      text: 'Full complete',
+      timestamp: 1000020,
+    });
+
+    expect(recorder.getSession().segments.length).toBe(1);
+    recorder.destroy();
+  });
 });

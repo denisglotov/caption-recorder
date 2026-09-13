@@ -98,6 +98,34 @@ export class SessionRecorder {
           return;
         }
 
+        const lastIndex = this.session.segments.length - 1;
+        if (lastIndex >= 0) {
+          const lastSeg = this.session.segments[lastIndex];
+          if (lastSeg.speaker === caption.speaker) {
+            const trimmedIncoming = caption.text.trim();
+            const trimmedLast = lastSeg.text.trim();
+
+            if (trimmedIncoming === trimmedLast) {
+              return;
+            }
+
+            if (trimmedIncoming.startsWith(trimmedLast)) {
+              lastSeg.text = trimmedIncoming;
+              lastSeg.endTime = caption.timestamp;
+              DraftStorageService.saveDraftDebounced(this.session);
+              this.sendMessage({
+                type: 'CR_UPDATE_TURN',
+                segment: lastSeg,
+              });
+              return;
+            }
+
+            if (trimmedLast.startsWith(trimmedIncoming)) {
+              return;
+            }
+          }
+        }
+
         const segment: TranscriptSegment = {
           id: segmentId,
           speaker: caption.speaker,
